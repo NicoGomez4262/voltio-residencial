@@ -17,11 +17,13 @@ import { firebaseConfig } from './firebase-config.js';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+// La base de datos del proyecto se llama "default" (no el clásico "(default)")
+const DB_ID = 'default';
 let db;
 try {
-  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }, DB_ID);
 } catch (e) {
-  db = initializeFirestore(app, {});
+  db = initializeFirestore(app, {}, DB_ID);
 }
 
 const state = { user: null, profileSaved: false };
@@ -147,6 +149,10 @@ const VB = {
 
   async setStationVisible(id, visible) {
     await updateDoc(doc(db, 'stations', id), { visible });
+  },
+
+  async updateStationFields(id, patch) {
+    await updateDoc(doc(db, 'stations', id), Object.assign({}, patch, { updatedAt: serverTimestamp() }));
   },
 
   /* ---------- Reservas ---------- */

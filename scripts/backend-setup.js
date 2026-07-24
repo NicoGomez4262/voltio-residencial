@@ -68,7 +68,7 @@ async function setup() {
   if (r.status === 409) console.log('firestore -> ya existía');
   else console.log('firestore ->', r.status, r.body.error ? r.body.error.message : 'creando…');
   for (let i = 0; i < 12; i++) {
-    const g = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)`);
+    const g = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default`);
     if (g.status === 200) { console.log('firestore listo:', g.body.locationId, g.body.type); break; }
     await sleep(4000);
   }
@@ -137,27 +137,31 @@ const F = {
   ts: () => ({ timestampValue: new Date().toISOString() })
 };
 
+// Conjunto MontReal — puestos de ejemplo del piloto residencial
 const SEED = [
-  { id: 'demo-chapinero', nombre: 'Garaje Chapinero Alto', dir: 'Cl 60 # 4-32, Chapinero, Bogotá', lat: 4.64860, lng: -74.06280, precio: 950, pow: 7.4, puerto: 'Tipo 2', desde: '06:00', hasta: '22:00', dias: [1, 1, 1, 1, 1, 1, 1], breb: '@caro.carga', titular: 'Carolina Martínez', ownerName: 'Carolina M.', rs: 47, rc: 10, cond: 'Parqueadero cubierto y con cámaras. Timbre en la puerta — llegando escribe por el chat. Baño disponible.' },
-  { id: 'demo-cedritos', nombre: 'Parqueadero Cedritos 140', dir: 'Cl 140 # 12-18, Cedritos, Bogotá', lat: 4.72500, lng: -74.04300, precio: 1100, pow: 7.4, puerto: 'Tipo 1', desde: '07:00', hasta: '20:00', dias: [0, 1, 1, 1, 1, 1, 0], breb: '@evcedritos', titular: 'Jorge Peña', ownerName: 'Jorge P.', rs: 33, rc: 7, cond: 'Entrada por el sótano 1, puesto 24. Vigilante 24h.' },
-  { id: 'demo-soledad', nombre: 'La Soledad 24h', dir: 'Cra 19 # 39-41, Teusaquillo, Bogotá', lat: 4.62800, lng: -74.07700, precio: 1250, pow: 11, puerto: 'CCS', desde: '00:00', hasta: '23:59', dias: [1, 1, 1, 1, 1, 1, 1], breb: '@lasoledad.ev', titular: 'EV Soledad SAS', ownerName: 'Estación Local', rs: 92, rc: 19, cond: 'Estación semi-comercial. Carga rápida CCS. Abierto 24/7, pago contra entrega.' },
-  { id: 'demo-kennedy', nombre: 'Casa Kennedy Central', dir: 'Cl 38 sur # 78-15, Kennedy, Bogotá', lat: 4.62900, lng: -74.15200, precio: 800, pow: 3.6, puerto: 'Doméstico', desde: '18:00', hasta: '23:00', dias: [1, 1, 1, 1, 1, 1, 1], breb: '@kdy.carga', titular: 'Marta López', ownerName: 'Marta L.', rs: 27, rc: 6, cond: 'Toma doméstica 220V en garaje familiar. Ideal para cargas nocturnas lentas.' },
-  { id: 'demo-macarena', nombre: 'Torres del Parque', dir: 'Cra 5 # 26-57, La Macarena, Bogotá', lat: 4.61800, lng: -74.06800, precio: 1000, pow: 7.4, puerto: 'Tipo 2', desde: '08:00', hasta: '21:00', dias: [1, 1, 1, 1, 1, 1, 1], breb: '@torrespq', titular: 'Andrés Gil', ownerName: 'Andrés G.', rs: 41, rc: 9, cond: 'Parqueadero de visitantes, avisar en portería que vas al puesto de carga Voltio.' },
-  { id: 'demo-chia', nombre: 'Chía — Finca El Roble', dir: 'Vereda Bojacá, Chía, Cundinamarca', lat: 4.86100, lng: -74.03300, precio: 1400, pow: 22, puerto: 'Tipo 2', desde: '09:00', hasta: '18:00', dias: [0, 0, 0, 0, 0, 1, 1], breb: '@roble.ev', titular: 'Camilo Roble', ownerName: 'Familia Roble', rs: 60, rc: 12, cond: 'Wallbox 22 kW junto al restaurante de la finca. Perfecto para plan de fin de semana.' },
-  { id: 'demo-poblado', nombre: 'El Poblado EV Point', dir: 'Cra 43A # 6 sur-15, El Poblado, Medellín', lat: 6.20880, lng: -75.56790, precio: 1050, pow: 11, puerto: 'Tipo 2', desde: '06:00', hasta: '22:00', dias: [1, 1, 1, 1, 1, 1, 1], breb: '@pobladoev', titular: 'Sara Restrepo', ownerName: 'Sara R.', rs: 74, rc: 15, cond: 'Edificio con portería. Deja tu documento y sube al puesto 12. Café de cortesía ☕.' }
+  { id: 'mr-t1-ana',    nombre: 'Torre 1 · Parqueadero cubierto', torre: '1', num: 'P-112', puerto: 'Tipo 2',     pow: 7.4, tamano: 'Mediano', precio: 900,  sf: 0,    desc: 0,   dias: [0,1,1,1,1,1,0], desde: '06:00', hasta: '22:00', breb: '@ana.montreal', titular: 'Ana Gómez',        ownerName: 'Ana G. (Torre 1)',   rs: 47, rc: 10, cond: 'Cubierto y con cámaras. Escríbeme por el chat cuando llegues y te abro el sótano.' },
+  { id: 'mr-t3-carlos', nombre: 'Torre 3 · Toma nocturna',        torre: '3', num: 'P-305', puerto: 'Doméstico', pow: 3.6, tamano: 'Pequeño', precio: 800,  sf: 0,    desc: 0,   dias: [1,1,1,1,1,1,1], desde: '18:00', hasta: '23:00', breb: '@carlos3',     titular: 'Carlos Ruiz',      ownerName: 'Carlos R. (Torre 3)', rs: 22, rc: 6,  cond: 'Toma de 220V, ideal para dejar el carro cargando de noche. Puesto para autos compactos.' },
+  { id: 'mr-t2-sofia',  nombre: 'Torre 2 · Wallbox 11 kW',        torre: '2', num: 'P-208', puerto: 'Tipo 2',     pow: 11,  tamano: 'Grande',  precio: 1000, sf: 1000, desc: 0,   dias: [1,1,1,1,1,1,0], desde: '07:00', hasta: '21:00', breb: '@sofiap',      titular: 'Sofía Peña',       ownerName: 'Sofía P. (Torre 2)',  rs: 58, rc: 12, cond: 'Wallbox rápido de 11 kW en puesto grande. Incluye una pequeña tarifa por el uso del equipo.' },
+  { id: 'mr-t5-diego',  nombre: 'Torre 5 · Carga rápida CCS',     torre: '5', num: 'P-501', puerto: 'CCS',        pow: 22,  tamano: 'Grande',  precio: 1200, sf: 0,    desc: 0,   dias: [0,0,0,0,0,1,1], desde: '08:00', hasta: '19:00', breb: '@diego.ev',    titular: 'Diego Salas',      ownerName: 'Diego S. (Torre 5)',  rs: 30, rc: 7,  cond: 'Cargador CCS de alta potencia, disponible solo fines de semana. Reserva con anticipación.' },
+  { id: 'mr-visit',     nombre: 'Parqueadero de visitantes',      torre: '—', num: 'P-V04', puerto: 'Tipo 1',     pow: 7.4, tamano: 'Mediano', precio: 950,  sf: 0,    desc: 200, dias: [1,1,1,1,1,1,1], desde: '08:00', hasta: '20:00', breb: '@montreal.admin', titular: 'Admón. MontReal', ownerName: 'Administración',      rs: 41, rc: 9,  cond: 'Puesto de visitantes gestionado por la administración. Avisa en portería al llegar.' }
 ];
 
 async function seed() {
   for (const s of SEED) {
     const fields = {
+      conjunto: F.s('montreal'),
       ownerUid: F.s('voltio-demo'),
       ownerName: F.s(s.ownerName),
       demo: F.b(true),
       nombre: F.s(s.nombre),
-      dir: F.s(s.dir),
-      lat: F.n(s.lat), lng: F.n(s.lng),
-      precio: F.n(s.precio), pow: F.n(s.pow),
+      torre: F.s(s.torre),
+      numeroParqueadero: F.s(s.num),
       puerto: F.s(s.puerto),
+      pow: F.n(s.pow),
+      tamano: F.s(s.tamano),
+      precio: F.n(s.precio),
+      serviceFee: F.n(s.sf),
+      discount: F.n(s.desc),
       desde: F.s(s.desde), hasta: F.s(s.hasta),
       dias: F.arrN(s.dias),
       breb: F.s(s.breb), titular: F.s(s.titular),
@@ -168,7 +172,7 @@ async function seed() {
       createdAt: F.ts()
     };
     const r = await api('PATCH',
-      `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/stations/${s.id}`,
+      `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default/documents/stations/${s.id}`,
       { fields });
     console.log('seed', s.id, '->', r.status, r.body.error ? r.body.error.message : 'ok');
   }
@@ -177,7 +181,7 @@ async function seed() {
 
 /* ============================ CHECK ============================ */
 async function check() {
-  const db = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)`);
+  const db = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default`);
   console.log('Firestore  :', db.status === 200
     ? `OK (${db.body.locationId}, ${db.body.type})`
     : `FALTA (${db.status} ${db.body.error ? db.body.error.message.slice(0, 60) : ''})`);
@@ -192,6 +196,24 @@ async function check() {
   const idp = await api('GET', `https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT}/defaultSupportedIdpConfigs`);
   const gl = ((idp.body && idp.body.defaultSupportedIdpConfigs) || []).find((c) => (c.name || '').endsWith('google.com'));
   console.log('Auth Google:', gl ? (gl.enabled ? 'OK habilitado' : 'existe pero DESHABILITADO') : 'FALTA (habilítalo en consola)');
+}
+
+/* ============================ RULES ============================ */
+async function rules() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
+  const rs = await api('POST', `https://firebaserules.googleapis.com/v1/projects/${PROJECT}/rulesets`,
+    { source: { files: [{ name: 'firestore.rules', content: src }] } });
+  if (rs.status !== 200) { console.log('crear ruleset ->', rs.status, JSON.stringify(rs.body).slice(0, 300)); return; }
+  const rulesetName = rs.body.name;
+  console.log('ruleset creado:', rulesetName);
+  const relName = `projects/${PROJECT}/releases/cloud.firestore`;
+  let up = await api('PATCH', `https://firebaserules.googleapis.com/v1/${relName}`,
+    { release: { name: relName, rulesetName } });
+  if (up.status === 404 || (up.body.error && /not.*exist|NOT_FOUND/i.test(JSON.stringify(up.body.error)))) {
+    up = await api('POST', `https://firebaserules.googleapis.com/v1/projects/${PROJECT}/releases`,
+      { name: relName, rulesetName });
+  }
+  console.log('publicar release ->', up.status, up.body.error ? JSON.stringify(up.body.error.message || up.body.error) : 'OK reglas activas');
 }
 
 /* ============================ IAM ============================ */
@@ -213,5 +235,11 @@ async function iam() {
   else if (cmd === 'google') await tryGoogle();
   else if (cmd === 'check') await check();
   else if (cmd === 'iam') await iam();
+  else if (cmd === 'rules') await rules();
+  else if (cmd === 'dbs') {
+    const r = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases`);
+    console.log('list databases ->', r.status);
+    console.log(JSON.stringify(r.body, null, 2).slice(0, 1200));
+  }
   else console.log('comando desconocido:', cmd);
 })().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });

@@ -904,6 +904,91 @@ textarea {
 }
 
 /* =========================================================
+   v2.2 — Residencial: búsqueda, resultados, calendario
+   ========================================================= */
+.hero-search { padding: 4px 2px 14px; }
+.hero-search h2 { font-size: 20px; font-weight: 800; letter-spacing: 0.2px; }
+.hero-search p { font-size: 13.5px; color: var(--text-dim); margin-top: 5px; line-height: 1.5; }
+
+.demo-pill {
+  font-size: 11.5px; font-weight: 700; color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1); border: 1px solid rgba(var(--accent-rgb), 0.3);
+  padding: 5px 12px; border-radius: 999px; letter-spacing: 0.3px;
+}
+.input-inline {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-size: 15px; padding: 12px 14px; outline: none; color-scheme: dark; margin-top: 2px;
+}
+.input-inline:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+.band-note { font-size: 11.5px; color: var(--text-mute); margin-top: 8px; min-height: 14px; }
+.f-avail { padding-top: 4px; border-top: 1px solid var(--border); }
+
+.results-head { margin: 2px 0 4px; }
+.rh-count { font-size: 13.5px; font-weight: 700; color: var(--text); display: block; margin: 6px 2px 10px; }
+.rh-none { font-size: 13px; color: var(--text-dim); margin: 6px 2px 12px; line-height: 1.55; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.miss-red { color: var(--danger); font-weight: 700; }
+.sc-badge.b-torre { color: var(--text-dim); }
+.mtag.miss { color: var(--danger); }
+.sc-avail { margin-top: 11px; font-size: 12.5px; color: var(--text-dim); }
+.sc-avail.miss { color: var(--danger); }
+.miss-note { margin-top: 9px; font-size: 12px; color: var(--danger); }
+.miss-note b { font-weight: 700; }
+.sc-actions { display: flex; gap: 8px; margin-top: 13px; }
+.sc-actions button { flex: 1; padding: 11px; font-size: 13.5px; }
+.sc-mine-note { margin-top: 11px; font-size: 12px; color: var(--text-mute); }
+
+/* Calendario */
+.cal-card { }
+.cal-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+.cal-arrow { width: 32px; height: 32px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); font-size: 18px; color: var(--text-dim); line-height: 1; }
+.cal-arrow:hover { color: var(--text); }
+.cal-range { font-size: 13px; font-weight: 600; min-width: 150px; text-align: center; }
+.calendar { }
+.cal-grid { display: flex; gap: 5px; }
+.cal-times { position: relative; width: 24px; flex-shrink: 0; margin-top: 26px; height: 300px; }
+.cal-times span { position: absolute; right: 1px; transform: translateY(-50%); font-size: 9px; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.cal-days { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; min-width: 0; }
+.cal-day { display: flex; flex-direction: column; min-width: 0; }
+.cal-dh { text-align: center; padding: 2px 0 4px; height: 26px; }
+.cal-dh span { font-size: 9.5px; color: var(--text-mute); text-transform: uppercase; }
+.cal-dh b { display: block; font-size: 12px; font-weight: 700; margin-top: 1px; }
+.cal-dh.is-today b { color: var(--accent); }
+.cal-col { position: relative; height: 300px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+.cal-free { position: absolute; left: 0; right: 0; background: rgba(var(--accent-rgb), 0.07); border-top: 1px solid rgba(var(--accent-rgb), 0.14); border-bottom: 1px solid rgba(var(--accent-rgb), 0.14); }
+.cal-ev { position: absolute; left: 2px; right: 2px; border-radius: 5px; padding: 2px 3px; font-size: 8px; overflow: hidden; line-height: 1.15; min-height: 14px; }
+.cal-ev b { display: block; font-size: 8px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cal-ev span { font-size: 7.5px; opacity: 0.85; white-space: nowrap; }
+.cal-ev.ev-ok { background: var(--accent); color: var(--on-accent); }
+.cal-ev.ev-pend { background: rgba(var(--accent-rgb), 0.12); border: 1px dashed var(--accent); color: var(--accent); }
+.cal-legend { display: flex; gap: 16px; justify-content: center; margin-top: 14px; font-size: 11.5px; color: var(--text-dim); }
+.cal-legend .lg { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+.lg-ok { background: var(--accent); }
+.lg-pend { background: rgba(var(--accent-rgb), 0.12); border: 1px dashed var(--accent); }
+.lg-free { background: rgba(var(--accent-rgb), 0.12); }
+
+/* Novedades / host */
+.notif-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-radius: var(--radius); margin-bottom: 14px;
+  background: var(--surface); border: 1px solid rgba(var(--accent-rgb), 0.28);
+}
+.notif-banner b { display: block; font-size: 14px; }
+.notif-banner span { display: block; font-size: 12px; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
+.notif-banner button { flex-shrink: 0; }
+
+.foto-soon {
+  padding: 22px; text-align: center; border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong); color: var(--text-mute); font-size: 13px;
+}
+.sub-h { font-size: 12.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; margin: 18px 0 12px; }
+.reason-list { display: grid; gap: 8px; width: 100%; }
+.reason-btn { text-align: left; padding: 13px 15px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font-size: 14px; color: var(--text); transition: border-color 0.15s; }
+.reason-btn:hover { border-color: var(--border-strong); }
+.reason-btn.on { border-color: var(--accent); background: var(--surface-3); }
+.bk-pay.p-rej { background: rgba(var(--danger-rgb), 0.07); border-color: rgba(var(--danger-rgb), 0.3); color: var(--text-dim); }
+.avatar-chip img { width: 100%; height: 100%; object-fit: cover; }
+
+/* =========================================================
    Reduced motion
    ========================================================= */
 @media (prefers-reduced-motion: reduce) {
