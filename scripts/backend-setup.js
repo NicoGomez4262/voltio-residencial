@@ -206,14 +206,48 @@ async function rules() {
   if (rs.status !== 200) { console.log('crear ruleset ->', rs.status, JSON.stringify(rs.body).slice(0, 300)); return; }
   const rulesetName = rs.body.name;
   console.log('ruleset creado:', rulesetName);
-  const relName = `projects/${PROJECT}/releases/cloud.firestore`;
+  // La base de este proyecto se llama "default" (base CON NOMBRE, no la clásica
+  // "(default)"). El release de reglas debe ser cloud.firestore/default; usar
+  // solo "cloud.firestore" publicaría a una base (default) que aquí no existe.
+  const DB = process.argv[3] || 'default';
+  const relId = DB === '(default)' ? 'cloud.firestore' : `cloud.firestore/${DB}`;
+  const relName = `projects/${PROJECT}/releases/${relId}`;
   let up = await api('PATCH', `https://firebaserules.googleapis.com/v1/${relName}`,
     { release: { name: relName, rulesetName } });
   if (up.status === 404 || (up.body.error && /not.*exist|NOT_FOUND/i.test(JSON.stringify(up.body.error)))) {
     up = await api('POST', `https://firebaserules.googleapis.com/v1/projects/${PROJECT}/releases`,
       { name: relName, rulesetName });
   }
-  console.log('publicar release ->', up.status, up.body.error ? JSON.stringify(up.body.error.message || up.body.error) : 'OK reglas activas');
+  console.log('publicar release', relId, '->', up.status, up.body.error ? JSON.stringify(up.body.error.message || up.body.error) : 'OK reglas activas');
+}
+
+/* ============================ ADMIN ============================ */
+/**
+ * Asigna (o quita) el rol de administrador del conjunto por correo:
+ *   node scripts/backend-setup.js admin correo@dominio.com          -> role: admin
+ *   node scripts/backend-setup.js admin correo@dominio.com guest    -> role: guest
+ * La cuenta debe haber iniciado sesión en la app al menos una vez.
+ */
+async function admin() {
+  const email = process.argv[3];
+  const role = process.argv[4] || 'admin';
+  if (!email) { console.log('Uso: node scripts/backend-setup.js admin <correo> [admin|guest]'); return; }
+
+  const lk = await api('POST', `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:lookup`, { email: [email] });
+  const u = ((lk.body && lk.body.users) || [])[0];
+  if (!u) { console.log(`No existe una cuenta para ${email}. Pídele que entre a la app una vez.`); return; }
+  console.log('uid:', u.localId, '| nombre:', u.displayName || '(sin nombre)');
+
+  const base = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default/documents/users/${u.localId}`;
+  const cur = await api('GET', base);
+  const fields = { role: F.s(role), updatedAt: F.ts() };
+  if (cur.status !== 200) { // el perfil aún no existe: lo creamos con lo básico
+    fields.email = F.s(u.email || email);
+    fields.name = F.s(u.displayName || (u.email || email).split('@')[0]);
+  }
+  const mask = Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&');
+  const r = await api('PATCH', `${base}?${mask}`, { fields });
+  console.log(`role="${role}" ->`, r.status, r.body.error ? r.body.error.message : 'OK');
 }
 
 /* ============================ IAM ============================ */
@@ -236,6 +270,7 @@ async function iam() {
   else if (cmd === 'check') await check();
   else if (cmd === 'iam') await iam();
   else if (cmd === 'rules') await rules();
+  else if (cmd === 'admin') await admin();
   else if (cmd === 'dbs') {
     const r = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases`);
     console.log('list databases ->', r.status);

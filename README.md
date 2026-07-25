@@ -131,6 +131,34 @@ Siguiente paso pensado: integración **PSE / pasarela** (Wompi, PayU o similar) 
 retención del pago hasta completar la carga y liberación automática al anfitrión
 (split payment), eliminando la transferencia manual.
 
+## 🏙️ Piloto residencial (v2.4 — conjunto MontReal)
+
+La app en producción es **Voltio Residencial**: el mismo motor, pero cerrado a un
+conjunto. Además del rol `admin` (panel de métricas, puestos comunes y usuarios), la
+v2.4 agrega:
+
+- **📄 Reporte mensual para la administración** — en el panel, con selector de mes:
+  consumo e ingresos **por torre**, detalle por puesto y detalle de cargas.
+  Se descarga en **PDF** (generado por [`public/js/reporte.js`](public/js/reporte.js),
+  sin librerías) y en **CSV** (separador `;`, decimales con coma → lo abre Excel en
+  español directo).
+- **🔋 Historial real del conjunto** — las cargas medidas con la calculadora ya no se
+  quedan en `localStorage`: se guardan también en la colección **`sessions`** de
+  Firestore. Al entrar con la cuenta, las que estaban solo en el dispositivo se
+  sincronizan solas.
+- **🔗 Reserva ↔ carga real** — al calcular un cobro puedes vincularlo con una reserva;
+  esta queda `completada` con `kwhReal`/`totalReal` y el panel **no la cuenta dos
+  veces** (las reservas con `kwhReal` se excluyen del estimado).
+- **💵 Pago recibido** — el anfitrión confirma que llegó la transferencia Bre-B
+  (`pagado`); el vecino lo ve en su reserva y el panel muestra *pagado* vs *por cobrar*.
+- **📷 Fotos del puesto** — hasta 3, comprimidas en el dispositivo con
+  `compressImageFile`, visibles en la ficha antes de reservar.
+
+> **Reglas de Firestore:** la colección `sessions` y la restricción del campo `pagado`
+> (solo anfitrión o admin) están en [`firestore.rules`](firestore.rules). Publícalas con
+> `node scripts/backend-setup.js rules` — la base de este proyecto se llama `default`,
+> así que el release es `cloud.firestore/default`.
+
 ## 🗺️ Roadmap
 
 - [x] **Backend real**: Firebase Auth (Google/correo) + Firestore en tiempo real.
@@ -138,7 +166,10 @@ retención del pago hasta completar la carga y liberación automática al anfitr
 - [x] Calificaciones bidireccionales (anfitrión ↔ conductor) con agregados en vivo.
 - [x] Chat anfitrión-conductor (también sin reserva: "pregúntale al anfitrión").
 - [x] Fotos del parqueadero (comprimidas en el dispositivo) y condiciones del servicio.
-- [ ] Notificaciones push (FCM) cuando llega una solicitud o mensaje.
+- [x] Reporte mensual (PDF/CSV) por torre para la administración.
+- [x] Historial real del conjunto: cargas de la calculadora en Firestore.
+- [x] Confirmación de pago recibido por el anfitrión.
+- [ ] **Notificaciones push con la app cerrada** (FCM + Cloud Function; requiere plan Blaze).
 - [ ] Pagos integrados PSE/pasarela con conciliación automática.
 - [ ] Verificación de identidad (cédula) para el badge 🪪.
 - [ ] Check-in con QR al llegar al puesto.

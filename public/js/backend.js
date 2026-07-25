@@ -10,7 +10,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, onSnapshot,
+  collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, limit, serverTimestamp, runTransaction, increment
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
@@ -162,7 +162,7 @@ const VB = {
     bk.driverUid = uid;
     bk.driverName = VB.userName();
     bk.createdAt = serverTimestamp();
-    bk.estado = 'pendiente';
+    bk.estado = bk.estado || 'pendiente'; // puestos comunes/visitantes nacen 'confirmada'
     const ref = await addDoc(collection(db, 'bookings'), bk);
     return ref.id;
   },
@@ -191,6 +191,52 @@ const VB = {
 
   async updateBooking(id, patch) {
     await updateDoc(doc(db, 'bookings', id), patch);
+  },
+
+  // El anfitrión confirma que la transferencia Bre-B llegó (cierra el ciclo de pago).
+  async markBookingPaid(id, pagado) {
+    await updateDoc(doc(db, 'bookings', id), {
+      pagado: !!pagado,
+      pagadoAt: pagado ? serverTimestamp() : null,
+      pagadoPor: pagado ? (VB.userName() || '') : ''
+    });
+  },
+
+  /* ---------- Cargas medidas con la calculadora (historial real) ---------- */
+  async saveChargeSession(data) {
+    const uid = VB.uid();
+    if (!uid) throw new Error('login');
+    const payload = Object.assign({}, data, {
+      ownerUid: uid,
+      ownerName: VB.userName(),
+      conjunto: data.conjunto || 'montreal',
+      at: serverTimestamp()
+    });
+    const ref = await addDoc(collection(db, 'sessions'), payload);
+    return ref.id;
+  },
+  async updateChargeSession(id, patch) {
+    await updateDoc(doc(db, 'sessions', id), patch);
+  },
+  async deleteChargeSession(id) {
+    await deleteDoc(doc(db, 'sessions', id));
+  },
+  watchMySessions(cb, onErr) {
+    const uid = VB.uid();
+    if (!uid) return () => {};
+    const q = query(collection(db, 'sessions'), where('ownerUid', '==', uid));
+    return onSnapshot(q, (snap) => {
+      const list = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      list.sort((a, b) => String(b.dateISO || '').localeCompare(String(a.dateISO || '')));
+      cb(list);
+    }, (e) => { if (onErr) onErr(e); });
+  },
+  watchAllSessions(cb, onErr) {
+    return onSnapshot(query(collection(db, 'sessions')), (snap) => {
+      const list = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      list.sort((a, b) => String(b.dateISO || '').localeCompare(String(a.dateISO || '')));
+      cb(list);
+    }, (e) => { if (onErr) onErr(e); });
   },
 
   /* ---------- Chat ---------- */
@@ -276,6 +322,68 @@ const VB = {
       list.sort((a, b) => (b.at && b.at.seconds || 0) - (a.at && a.at.seconds || 0));
       return list.slice(0, 5);
     } catch (e) { return []; }
+  },
+
+  /* ---------- Perfil del residente ---------- */
+  watchMyProfile(cb, onErr) {
+    const uid = VB.uid();
+    if (!uid) return () => {};
+    return onSnapshot(doc(db, 'users', uid), (snap) => {
+      cb(snap.exists() ? Object.assign({ uid: snap.id }, snap.data()) : null);
+    }, (e) => { if (onErr) onErr(e); });
+  },
+  async saveProfile(patch) {
+    const uid = VB.uid();
+    if (!uid) throw new Error('login');
+    // Nunca enviamos 'role' desde aquí (lo controla el admin / las reglas).
+    const clean = Object.assign({}, patch); delete clean.role;
+    await setDoc(doc(db, 'users', uid), Object.assign(clean, { updatedAt: serverTimestamp() }), { merge: true });
+  },
+
+  /* ---------- Administración del conjunto ---------- */
+  watchAllBookings(cb, onErr) {
+    return onSnapshot(query(collection(db, 'bookings')), (snap) => {
+      const list = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      list.sort((a, b) => (b.createdAt && b.createdAt.seconds || 0) - (a.createdAt && a.createdAt.seconds || 0));
+      cb(list);
+    }, (e) => { if (onErr) onErr(e); });
+  },
+  watchConjuntoStations(conjunto, cb, onErr) {
+    const q = query(collection(db, 'stations'), where('conjunto', '==', conjunto || 'montreal'));
+    return onSnapshot(q, (snap) => {
+      cb(snap.docs.map((d) => Object.assign({ id: d.id }, d.data())));
+    }, (e) => { if (onErr) onErr(e); });
+  },
+  async listUsers() {
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      return snap.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
+    } catch (e) { return []; }
+  },
+  async setUserRole(uid, role) {
+    await updateDoc(doc(db, 'users', uid), { role, updatedAt: serverTimestamp() });
+  },
+  async saveManagedSpot(data, id) {
+    const uid = VB.uid();
+    if (!uid) throw new Error('login');
+    const payload = Object.assign({}, data, {
+      ownerUid: uid,
+      ownerName: data.ownerName || 'Administración',
+      common: true,
+      conjunto: data.conjunto || 'montreal',
+      ownerVerified: true,
+      updatedAt: serverTimestamp()
+    });
+    if (id) { await updateDoc(doc(db, 'stations', id), payload); return id; }
+    payload.createdAt = serverTimestamp();
+    payload.ratingSum = 0; payload.ratingCount = 0;
+    const ref = await addDoc(collection(db, 'stations'), payload);
+    return ref.id;
+  },
+  async deleteStation(id) { await deleteDoc(doc(db, 'stations', id)); },
+  async getStation(id) {
+    try { const s = await getDoc(doc(db, 'stations', id)); return s.exists() ? Object.assign({ id: s.id }, s.data()) : null; }
+    catch (e) { return null; }
   }
 };
 

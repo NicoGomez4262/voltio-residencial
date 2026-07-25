@@ -1,7 +1,9 @@
 /* =========================================================
-   VOLTIO RESIDENCIAL · v2.2 — Piloto conjunto MontReal
+   VOLTIO RESIDENCIAL · v2.4 — Piloto conjunto MontReal
    Búsqueda con ranking, calendario tipo Teams, reservas,
    chat, calificaciones y notificaciones (Firebase real).
+   v2.4: historial real en la nube, pago confirmado por el
+   anfitrión, reporte mensual (PDF/CSV) y fotos del puesto.
    ========================================================= */
 (function () {
   'use strict';
@@ -10,6 +12,7 @@
   const LS_SETTINGS = 'voltio.res.settings.v1';
   const LS_SESSIONS = 'voltio.res.sessions.v1';
   const LS_SEEN = 'voltio.res.seen.v1';
+  const LS_ADMINGUEST = 'voltio.res.adminAsGuest.v1';
   const CONJUNTO = 'montreal';
   const CO2_GAS_PER_L = 2.31, GAS_KM_PER_L = 12, GAS_PRICE_PER_L = 4300;
   const DIAS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
@@ -24,6 +27,16 @@
     { id: 'mr-t2-sofia', demo: true, ownerUid: 'voltio-demo', ownerName: 'Sofía P. (Torre 2)', nombre: 'Torre 2 · Wallbox 11 kW', torre: '2', numeroParqueadero: 'P-208', puerto: 'Tipo 2', pow: 11, tamano: 'Grande', precio: 1000, serviceFee: 1000, discount: 0, dias: [1,1,1,1,1,1,0], desde: '07:00', hasta: '21:00', breb: '@sofiap', titular: 'Sofía Peña', visible: true, condiciones: 'Wallbox rápido de 11 kW en puesto grande.', ratingSum: 58, ratingCount: 12 },
     { id: 'mr-t5-diego', demo: true, ownerUid: 'voltio-demo', ownerName: 'Diego S. (Torre 5)', nombre: 'Torre 5 · Carga rápida CCS', torre: '5', numeroParqueadero: 'P-501', puerto: 'CCS', pow: 22, tamano: 'Grande', precio: 1200, serviceFee: 0, discount: 0, dias: [0,0,0,0,0,1,1], desde: '08:00', hasta: '19:00', breb: '@diego.ev', titular: 'Diego Salas', visible: true, condiciones: 'CCS de alta potencia, solo fines de semana.', ratingSum: 30, ratingCount: 7 },
     { id: 'mr-visit', demo: true, ownerUid: 'voltio-demo', ownerName: 'Administración', nombre: 'Parqueadero de visitantes', torre: '—', numeroParqueadero: 'P-V04', puerto: 'Tipo 1', pow: 7.4, tamano: 'Mediano', precio: 950, serviceFee: 0, discount: 200, dias: [1,1,1,1,1,1,1], desde: '08:00', hasta: '20:00', breb: '@montreal.admin', titular: 'Admón. MontReal', visible: true, condiciones: 'Gestionado por la administración. Avisa en portería.', ratingSum: 41, ratingCount: 9 }
+  ];
+
+  // Residentes de ejemplo para el panel de administración (solo se usan en modo prueba local)
+  const DEMO_USERS = [
+    { uid: 'u-ana',    name: 'Ana Gómez',       email: 'ana.gomez@montreal.co',   phone: '300 111 2233', torre: '1', apto: '112', role: 'guest', emailVerified: true },
+    { uid: 'u-carlos', name: 'Carlos Ruiz',     email: 'carlos.ruiz@montreal.co', phone: '311 445 6677', torre: '3', apto: '305', role: 'guest', emailVerified: true },
+    { uid: 'u-sofia',  name: 'Sofía Peña',      email: 'sofia.pena@montreal.co',  phone: '320 998 1010', torre: '2', apto: '208', role: 'guest', emailVerified: false },
+    { uid: 'u-diego',  name: 'Diego Salas',     email: 'diego.salas@montreal.co', phone: '315 223 4455', torre: '5', apto: '501', role: 'guest', emailVerified: true },
+    { uid: 'u-laura',  name: 'Laura Mesa',      email: 'laura.mesa@montreal.co',  phone: '304 776 5544', torre: '4', apto: '402', role: 'guest', emailVerified: true },
+    { uid: 'u-admin',  name: 'Admón. MontReal', email: 'admin@montreal.co',       phone: '601 743 0000', torre: '—', apto: '—',  role: 'admin', emailVerified: true }
   ];
 
   /* ---------- Helpers ---------- */
@@ -76,15 +89,28 @@
   let currentView = 'buscar';
   const taState = { torre: null, piso: null, unit: null };
   const chartState = { group: 'day' };
+  const admChart = { metric: 'cop' };
   const filters = { port: 'todos', minPow: 0, size: 'todos', day: 'any', date: null, band: 'any' };
   const spDias = [0, 1, 1, 1, 1, 1, 0];
   const calOffset = { driver: 0, host: 0 };
+  const MAX_FOTOS = 3;
+  const repState = { month: null };
 
   let VB = null, user = null, backendOff = false;
   let stations = [], myBookings = [], myRequests = [], myChats = [], myStationDoc = null;
   let sheetStation = null, chatCtx = null, rateCtx = null, rateStars = 0, rejectCtx = null, rejReason = null;
+  // Administración del conjunto
+  let myProfile = null, allBookings = [], allStations = [], allUsers = [], allSessions = [];
+  let adminSpotCtx = null, userCtx = null, adminAsGuest = loadJSON(LS_ADMINGUEST, false);
+  let spotQr = null; // data URL del QR mientras se edita un puesto
+  let spotFotos = []; // data URLs de las fotos mientras se edita el puesto
+  let syncDone = false; // ya intentamos subir las cargas locales pendientes
   const unsubs = {};
   const seen = loadJSON(LS_SEEN, { reqs: [], msgs: {} });
+
+  // ¿La cuenta es administradora? (por perfil real, o modo prueba solo en localhost)
+  const devAdmin = () => { try { return (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && localStorage.getItem('voltio.dev.admin') === '1'; } catch (e) { return false; } };
+  const isAdmin = () => !!(myProfile && myProfile.role === 'admin') || devAdmin();
 
   const persistSettings = () => localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
   const persistSessions = () => localStorage.setItem(LS_SESSIONS, JSON.stringify(sessions));
@@ -112,17 +138,30 @@
      ========================================================= */
   const TABS = {
     driver: ['buscar', 'reservas', 'chats', 'settings'],
-    host: ['novedades', 'agenda', 'puesto', 'analisis', 'chats', 'settings']
+    host: ['novedades', 'agenda', 'puesto', 'analisis', 'chats', 'settings'],
+    admin: ['panel', 'usuarios', 'settings']
   };
+  // Modo efectivo: el admin ve el panel, salvo que elija "ver como residente".
+  function effectiveMode() {
+    if (isAdmin() && !adminAsGuest) return 'admin';
+    return settings.role; // 'driver' | 'host' | null
+  }
   function applyRole(role, opts) {
-    settings.role = role; persistSettings();
+    if (role === 'driver' || role === 'host') { settings.role = role; persistSettings(); }
     const list = TABS[role] || TABS.host;
     $$('.nav-btn').forEach((b) => b.classList.toggle('nav-hidden', !list.includes(b.dataset.view)));
-    $('#roleTag').textContent = role === 'driver' ? 'MontReal · Busco carga' : 'MontReal · Anfitrión';
-    $$('#roleSwitch .seg-btn').forEach((b) => b.classList.toggle('is-active', b.dataset.role === role));
+    $('#roleTag').textContent = role === 'admin' ? 'MontReal · Administración' : role === 'driver' ? 'MontReal · Busco carga' : 'MontReal · Anfitrión';
+    $$('#roleSwitch .seg-btn').forEach((b) => b.classList.toggle('is-active', b.dataset.role === settings.role));
     $('#roleGate').classList.add('hidden'); $('#roleGate').setAttribute('aria-hidden', 'true');
     if (!opts || !opts.keepView) goView(list[0]);
     else if (!list.includes(currentView)) goView(list[0]);
+  }
+  // Decide y aplica el modo según admin/rol; muestra el selector si aún no hay rol.
+  function refreshMode(opts) {
+    const m = effectiveMode();
+    if (m === 'admin' || m === 'driver' || m === 'host') { applyRole(m, opts); return; }
+    $('#roleGate').classList.remove('hidden'); $('#roleGate').setAttribute('aria-hidden', 'false');
+    $$('.nav-btn').forEach((b) => b.classList.toggle('nav-hidden', !TABS.host.includes(b.dataset.view)));
   }
   function goView(name) {
     currentView = name;
@@ -135,7 +174,9 @@
     if (name === 'puesto') renderPuesto();
     if (name === 'analisis') { renderHistory(); renderCharts(); }
     if (name === 'chats') { markChatsSeen(); renderChatList(); }
-    if (name === 'settings') renderAuthUI();
+    if (name === 'panel') renderPanel();
+    if (name === 'usuarios') renderUsers();
+    if (name === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); updateNotifState(); }
     updateDots();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -164,14 +205,40 @@
     $('#resContent').classList.toggle('hidden', !logged);
     $('#novContent').classList.toggle('hidden', !logged);
     $('#puestoForm').classList.toggle('hidden', !logged || (myStationDoc && !window.__spotEditing));
+    $('#profileCard').classList.toggle('hidden', !logged);
+    $('#adminCard').classList.toggle('hidden', !isAdmin());
+    $('#roleCard').classList.toggle('hidden', isAdmin() && !adminAsGuest);
   }
   function startWatchers() {
-    stopWatchers(['bk', 'rq', 'ch']);
-    if (!VB || !user) { myBookings = []; myRequests = []; myChats = []; refreshAll(); return; }
+    stopWatchers(['bk', 'rq', 'ch', 'prof', 'allbk', 'allst', 'allses']);
+    if (!VB || !user) { myBookings = []; myRequests = []; myChats = []; myProfile = null; allBookings = []; allStations = []; allUsers = []; allSessions = []; refreshAll(); return; }
+    unsubs.prof = VB.watchMyProfile((p) => { const was = isAdmin(); myProfile = p; onProfileUpdate(was); });
     unsubs.bk = VB.watchMyBookings((l) => { myBookings = l; onBookingsUpdate(); });
     unsubs.rq = VB.watchRequests((l) => { const prev = myRequests; myRequests = l; onRequestsUpdate(prev); });
     unsubs.ch = VB.watchChats((l) => { const prev = myChats; myChats = l; onChatsUpdate(prev); });
     VB.myStation().then((st) => { myStationDoc = st; if (st) loadAvailabilityUI(st); if (currentView === 'puesto') renderPuesto(); if (currentView === 'agenda') renderAgenda(); }).catch(() => {});
+  }
+  function startAdminWatchers() {
+    if (unsubs.allbk) return;
+    unsubs.allbk = VB.watchAllBookings((l) => { const prev = allBookings; allBookings = l; onAllBookingsUpdate(prev); }, () => {});
+    unsubs.allst = VB.watchConjuntoStations(CONJUNTO, (l) => { allStations = l; if (currentView === 'panel') renderPanel(); }, () => {});
+    unsubs.allses = VB.watchAllSessions((l) => { allSessions = l; if (currentView === 'panel') renderPanel(); }, () => {});
+  }
+  function onProfileUpdate(wasAdmin) {
+    const nowAdmin = isAdmin();
+    if (currentView === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); }
+    if (nowAdmin && !wasAdmin) { startAdminWatchers(); refreshMode({ keepView: true }); }
+    else if (!nowAdmin && wasAdmin) { stopWatchers(['allbk', 'allst', 'allses']); allBookings = []; allStations = []; allSessions = []; refreshMode({ keepView: true }); }
+    else if (nowAdmin) { if (currentView === 'panel') renderPanel(); if (currentView === 'usuarios') renderUsers(); }
+  }
+  function onAllBookingsUpdate(prev) {
+    if (prev && prev.length) {
+      const prevIds = new Set(prev.map((x) => x.id));
+      allBookings.filter((b) => !prevIds.has(b.id)).slice(0, 3).forEach((b) => {
+        notify('Nueva reserva en el conjunto', (b.driverName || 'Un vecino') + ' · ' + (b.stationName || 'un puesto'));
+      });
+    }
+    if (currentView === 'panel') renderPanel();
   }
   function stopWatchers(keys) { keys.forEach((k) => { if (unsubs[k]) { try { unsubs[k](); } catch (e) {} delete unsubs[k]; } }); }
   function refreshAll() {
@@ -179,6 +246,8 @@
     if (currentView === 'novedades') renderNovedades();
     if (currentView === 'agenda') renderAgenda();
     if (currentView === 'chats') renderChatList();
+    if (currentView === 'panel') renderPanel();
+    if (currentView === 'usuarios') renderUsers();
     updateDots();
   }
   function onBookingsUpdate() { if (currentView === 'reservas') renderReservas(); updateDots(); }
@@ -189,6 +258,7 @@
     });
     if (currentView === 'novedades') renderNovedades();
     if (currentView === 'agenda') renderAgenda();
+    if (currentView === 'analisis') renderBookingLink();
     updateDots();
   }
   function onChatsUpdate(prev) {
@@ -220,11 +290,32 @@
      ========================================================= */
   function notify(title, body) {
     toast('🔔 ' + title);
+    if (navigator.vibrate) { try { navigator.vibrate(24); } catch (e) {} }
     try {
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png' });
+        const opts = { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: 'voltio-' + Date.now(), vibrate: [30, 20, 30] };
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, opts)).catch(() => { try { new Notification(title, opts); } catch (e) {} });
+        } else { new Notification(title, opts); }
       }
     } catch (e) {}
+  }
+  function requestNotifPermission() {
+    if (!('Notification' in window)) { toast('Tu navegador no soporta notificaciones', 'error'); return Promise.resolve('unsupported'); }
+    return Notification.requestPermission().then((p) => {
+      if (p === 'granted') { toast('Notificaciones activadas 🔔'); notify('Voltio MontReal', 'Te avisaremos de reservas, confirmaciones y mensajes.'); }
+      else if (p === 'denied') toast('Notificaciones bloqueadas en el navegador', 'error');
+      refreshNotifBanner(); updateNotifState();
+      return p;
+    }).catch(() => 'error');
+  }
+  function updateNotifState() {
+    const el = $('#notifState'); if (!el) return;
+    const sup = 'Notification' in window;
+    const st = sup ? Notification.permission : 'unsupported';
+    const map = { granted: '✅ Activadas', denied: '🚫 Bloqueadas (actívalas en los ajustes del navegador)', default: 'Aún no activadas', unsupported: 'No disponibles en este navegador' };
+    el.textContent = map[st] || '';
+    const btn = $('#notifEnable2'); if (btn) btn.classList.toggle('hidden', st === 'granted' || st === 'unsupported');
   }
   function refreshNotifBanner() {
     const banner = $('#notifBanner');
@@ -297,13 +388,13 @@
     }
     if (perfect.length) {
       head.innerHTML = `<span class="rh-count">${perfect.length} ${perfect.length === 1 ? 'puesto ideal' : 'puestos ideales'} para ti</span>`;
-      perfect.forEach((sp) => ul.appendChild(spotCard(sp, [])));
+      perfect.forEach((sp, i) => { const c = spotCard(sp, []); c.classList.add('stagger'); c.style.setProperty('--i', i); ul.appendChild(c); });
       return;
     }
     // Sin coincidencia exacta → recomendaciones ordenadas por menos diferencias
     const near = evaluated.slice().sort((a, b) => a.miss.length - b.miss.length || idealSort(a.sp, b.sp));
     head.innerHTML = `<div class="rh-none">No encontramos un puesto que cumpla <b>todo</b> lo que pediste.<br/>Estas opciones son las más cercanas — en <span class="miss-red">rojo</span> lo que cambia:</div>`;
-    near.forEach((e) => ul.appendChild(spotCard(e.sp, e.miss)));
+    near.forEach((e, i) => { const c = spotCard(e.sp, e.miss); c.classList.add('stagger'); c.style.setProperty('--i', i); ul.appendChild(c); });
   }
 
   function availText(sp) {
@@ -370,6 +461,7 @@
         <div class="sh-spec"><b>~${Math.round((sp.pow || 0) * (settings.kmPerKwh || 6))}</b><small>km/hora</small></div>
       </div>
       <div class="sh-avail">🗓️ Disponible: ${availText(sp)}</div>
+      ${(sp.fotos && sp.fotos.length) ? `<div class="foto-strip">${sp.fotos.map((f, i) => `<img src="${escapeHtml(f)}" alt="Foto ${i + 1} de ${escapeHtml(sp.nombre)}" loading="lazy"/>`).join('')}</div>` : ''}
       ${sp.condiciones ? `<div class="bk-pay" style="margin:0 0 14px">📋 ${escapeHtml(sp.condiciones)}</div>` : ''}
       <h3 class="sub-h">Agenda tu carga</h3>
       <div class="grid-2">
@@ -398,17 +490,21 @@
     const wd = parseYmd(fecha).getDay(), dias = sp.dias || [1, 1, 1, 1, 1, 1, 1];
     if (!dias[wd]) { toast('Ese día el puesto no está disponible', 'error'); return; }
     if (hToMin(from) < hToMin(sp.desde) || hToMin(to) > hToMin(sp.hasta)) { toast('Elige un horario entre ' + sp.desde + ' y ' + sp.hasta, 'error'); return; }
+    const common = !!(sp.common || sp.autoConfirm); // puestos de la administración: sin aprobación
     try {
       $('#bkSend').disabled = true;
-      const id = await VB.createBooking({
+      const bk = {
         stationId: sp.id, stationName: sp.nombre, ownerUid: sp.ownerUid, ownerName: sp.ownerName || 'Anfitrión',
-        torre: sp.torre || '', puerto: sp.puerto || '', breb: sp.breb || '', titular: sp.titular || '',
-        precio: sp.precio || 0, fecha, from, to, kwhEst, total: kwhEst * (sp.precio || 0), demo: !!sp.demo
-      });
+        torre: sp.torre || '', puerto: sp.puerto || '', breb: sp.breb || '', titular: sp.titular || '', banco: sp.banco || '',
+        precio: sp.precio || 0, fecha, from, to, kwhEst, total: kwhEst * (sp.precio || 0), demo: !!sp.demo, common
+      };
+      if (common) { bk.estado = 'confirmada'; bk.numeroParqueadero = sp.numeroParqueadero || ''; }
+      const id = await VB.createBooking(bk);
       closeSheet('#spotSheet');
       goView('reservas');
-      toast('Solicitud enviada 📨');
-      if (sp.demo) demoAutoConfirm(id, sp);
+      successPop();
+      if (common) { toast('¡Puesto reservado! ✅'); notify('Reserva confirmada', 'Ya puedes usar ' + (sp.nombre || 'el puesto') + '. Paga por Bre-B a la administración.'); }
+      else { toast('Solicitud enviada 📨'); if (sp.demo) demoAutoConfirm(id, sp); }
     } catch (e) {
       $('#bkSend').disabled = false;
       toast(e.message === 'login' ? 'Inicia sesión para reservar' : 'No se pudo crear la reserva', 'error');
@@ -431,14 +527,16 @@
     renderCalendar('#calDriver', myBookings, 'driver');
     const ul = $('#bookList'); ul.innerHTML = '';
     $('#bookEmpty').classList.toggle('hidden', myBookings.length > 0);
-    myBookings.forEach((bk) => {
+    myBookings.forEach((bk, i) => {
       const [cls, lab] = PILL[bk.estado] || ['p-dim', bk.estado];
-      const li = document.createElement('li'); li.className = 'book-card';
+      const li = document.createElement('li'); li.className = 'book-card stagger'; li.style.setProperty('--i', i);
       const fx = parseYmd(bk.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(bk.stationName)}</div><div class="bk-sub">de ${escapeHtml(bk.ownerName || '')} · Torre ${escapeHtml(bk.torre || '—')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
-        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(bk.from)}–${escapeHtml(bk.to)}</span><span>💰 ${fmtCOP(bk.total)} aprox.</span></div>
-        ${bk.estado === 'confirmada' ? `<div class="bk-pay">📍 Tu puesto: <span class="bk-key">${escapeHtml(bk.numeroParqueadero || 'coordinar por chat')}</span><br/>Al terminar, transfiere por <b>Bre-B</b> a <span class="bk-key">${escapeHtml(bk.breb || '—')}</span> · ${escapeHtml(bk.titular || bk.ownerName)}${bk.breb ? '<div class="bk-actions"><button class="btn-ghost btn-sm" data-copy="' + escapeHtml(bk.breb) + '">Copiar llave</button></div>' : ''}</div>` : ''}
+        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(bk.from)}–${escapeHtml(bk.to)}</span><span>💰 ${bk.totalReal ? fmtCOP(bk.totalReal) : fmtCOP(bk.total) + ' aprox.'}</span>${bk.kwhReal ? `<span>🔋 ${fmtKwh(bk.kwhReal)} kWh medidos</span>` : ''}</div>
+        ${(bk.estado === 'confirmada' || bk.estado === 'completada') ? `<div class="bk-pay${bk.pagado ? ' bk-paid' : ''}">📍 Tu puesto: <span class="bk-key">${escapeHtml(bk.numeroParqueadero || 'coordinar por chat')}</span>${bk.pagado
+          ? `<div class="bk-paid-line">✅ ${escapeHtml(bk.ownerName || 'El anfitrión')} confirmó que recibió tu pago de <b>${fmtCOP(bk.totalReal || bk.total)}</b>. ¡Todo en orden!</div>`
+          : `<br/>Paga por <b>Bre-B</b> a <span class="bk-key">${escapeHtml(bk.breb || '—')}</span>${bk.banco ? ' · ' + escapeHtml(bk.banco) : ''} · ${escapeHtml(bk.titular || bk.ownerName || '')}<div class="bk-actions">${bk.breb ? `<button class="btn-ghost btn-sm" data-copy="${escapeHtml(bk.breb)}">Copiar llave</button>` : ''}<button class="btn-ok btn-sm" data-qr="${bk.id}">💳 Ver pago / QR</button></div>`}</div>` : ''}
         ${bk.estado === 'rechazada' && bk.rejectReason ? `<div class="bk-pay p-rej">✋ Motivo: ${escapeHtml(bk.rejectReason)}</div>` : ''}
         <div class="bk-actions">
           <button class="btn-ghost btn-sm" data-chat="${bk.id}">💬 Chat</button>
@@ -452,6 +550,11 @@
     persistSeen();
     $$('#bookList [data-cancel]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.cancel, { estado: 'cancelada' }).then(() => toast('Reserva cancelada'))));
     $$('#bookList [data-copy]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Llave copiada 📋'); } catch (e) {} }));
+    $$('#bookList [data-qr]').forEach((b) => b.addEventListener('click', () => {
+      const bk = myBookings.find((x) => x.id === b.dataset.qr); if (!bk) return;
+      const st = findStation(bk.stationId);
+      openQrView({ stationName: bk.stationName, breb: bk.breb, banco: bk.banco, titular: bk.titular, ownerName: bk.ownerName, qr: (st && st.qr) || bk.qr || '' });
+    }));
     $$('#bookList [data-rate]').forEach((b) => b.addEventListener('click', () => { const bk = myBookings.find((x) => x.id === b.dataset.rate); if (bk) openRate({ bookingId: bk.id, stationId: bk.stationId, toName: bk.ownerName, tipo: 'driver-host' }); }));
     $$('#bookList [data-chat]').forEach((b) => b.addEventListener('click', () => { const bk = myBookings.find((x) => x.id === b.dataset.chat); if (bk) startChatWith({ id: bk.stationId, nombre: bk.stationName, ownerUid: bk.ownerUid, ownerName: bk.ownerName, demo: bk.demo }); }));
   }
@@ -463,8 +566,12 @@
     if (!user) { renderAuthUI(); return; }
     refreshNotifBanner();
     const pend = myRequests.filter((r) => r.estado === 'pendiente');
-    $('#novReqCount').textContent = pend.length ? pend.length + (pend.length === 1 ? ' nueva' : ' nuevas') : '';
-    renderReqList('#novReqList', '#novReqEmpty', myRequests.slice(0, 6));
+    const porCobrar = myRequests.filter((r) => (r.estado === 'confirmada' || r.estado === 'completada') && !r.pagado);
+    $('#novReqCount').textContent = pend.length ? pend.length + (pend.length === 1 ? ' nueva' : ' nuevas')
+      : (porCobrar.length ? porCobrar.length + (porCobrar.length === 1 ? ' por cobrar' : ' por cobrar') : '');
+    // Primero lo que pide acción: solicitudes nuevas, luego los pagos sin confirmar.
+    const rank = (r) => (r.estado === 'pendiente' ? 0 : ((r.estado === 'confirmada' || r.estado === 'completada') && !r.pagado ? 1 : 2));
+    renderReqList('#novReqList', '#novReqEmpty', myRequests.slice().sort((a, b) => rank(a) - rank(b)).slice(0, 8));
     // Chats recientes
     const cl = $('#novChatsList'); cl.innerHTML = '';
     $('#novChatsEmpty').classList.toggle('hidden', myChats.length > 0);
@@ -474,29 +581,39 @@
   function renderReqList(ulSel, emptySel, list) {
     const ul = $(ulSel); ul.innerHTML = '';
     if (emptySel) $(emptySel).classList.toggle('hidden', list.length > 0);
-    list.forEach((rq) => {
+    list.forEach((rq, i) => {
       const [cls, lab] = { pendiente: ['p-pend', 'Pendiente'], confirmada: ['p-ok', 'Aceptada'], rechazada: ['p-no', 'Declinada'], completada: ['p-dim', 'Completada'], cancelada: ['p-dim', 'Cancelada'] }[rq.estado] || ['p-dim', rq.estado];
-      const li = document.createElement('li'); li.className = 'book-card';
+      const li = document.createElement('li'); li.className = 'book-card stagger'; li.style.setProperty('--i', i);
       const fx = parseYmd(rq.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(rq.driverName || 'Vecino')}</div><div class="bk-sub">quiere ${escapeHtml(rq.stationName || 'tu puesto')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
-        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(rq.from)}–${escapeHtml(rq.to)}</span><span>⚡ ~${fmtKwh(rq.kwhEst)} kWh</span><span>💰 ${fmtCOP(rq.total)}</span></div>
+        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(rq.from)}–${escapeHtml(rq.to)}</span><span>⚡ ${rq.kwhReal ? fmtKwh(rq.kwhReal) + ' kWh medidos' : '~' + fmtKwh(rq.kwhEst) + ' kWh'}</span><span>💰 ${fmtCOP(rq.totalReal || rq.total)}</span>${rq.pagado ? '<span class="meta-paid">💵 Pago recibido</span>' : ''}</div>
         <div class="bk-actions">
           <button class="btn-ghost btn-sm" data-chat="${rq.id}">💬 Chat</button>
           ${rq.estado === 'pendiente' ? `<button class="btn-ok" data-acc="${rq.id}">Aceptar</button><button class="btn-ghost btn-danger" data-rej="${rq.id}">Declinar</button>` : ''}
           ${rq.estado === 'confirmada' ? `<button class="btn-ghost btn-sm" data-done="${rq.id}">Completada</button>` : ''}
+          ${(rq.estado === 'confirmada' || rq.estado === 'completada') ? `<button class="${rq.pagado ? 'btn-ghost btn-sm' : 'btn-ok btn-sm'}" data-pay="${rq.id}">${rq.pagado ? 'Marcar sin pagar' : '💵 Ya me pagó'}</button>` : ''}
         </div>`;
       ul.appendChild(li);
     });
     $$(ulSel + ' [data-acc]').forEach((b) => b.addEventListener('click', () => acceptRequest(b.dataset.acc)));
     $$(ulSel + ' [data-rej]').forEach((b) => b.addEventListener('click', () => openReject(b.dataset.rej)));
     $$(ulSel + ' [data-done]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.done, { estado: 'completada' }).then(() => toast('Carga completada 🔋'))));
+    $$(ulSel + ' [data-pay]').forEach((b) => b.addEventListener('click', () => toggleBookingPaid(b.dataset.pay)));
     $$(ulSel + ' [data-chat]').forEach((b) => b.addEventListener('click', () => { const rq = myRequests.find((x) => x.id === b.dataset.chat); if (rq) startChatWith({ id: rq.stationId, nombre: rq.stationName, ownerUid: rq.ownerUid, ownerName: rq.driverName, demo: rq.demo }, rq.driverUid); }));
   }
   function acceptRequest(id) {
     const rq = myRequests.find((x) => x.id === id);
     const num = (myStationDoc && myStationDoc.numeroParqueadero) || '';
-    VB.updateBooking(id, { estado: 'confirmada', numeroParqueadero: num }).then(() => toast('Reserva aceptada ✅ Avisamos a ' + ((rq && rq.driverName) || 'el vecino').split(' ')[0]));
+    VB.updateBooking(id, { estado: 'confirmada', numeroParqueadero: num }).then(() => { successPop(); toast('Reserva aceptada ✅ Avisamos a ' + ((rq && rq.driverName) || 'el vecino').split(' ')[0]); });
+  }
+  // El anfitrión confirma que la transferencia Bre-B llegó: cierra el ciclo del pago.
+  function toggleBookingPaid(id) {
+    const rq = myRequests.find((x) => x.id === id); if (!rq) return;
+    const marcar = !rq.pagado;
+    VB.markBookingPaid(id, marcar)
+      .then(() => { if (marcar) successPop(); toast(marcar ? 'Pago confirmado 💵 El vecino ya lo ve' : 'Pago marcado como pendiente'); })
+      .catch(() => toast('No se pudo registrar el pago', 'error'));
   }
 
   /* =========================================================
@@ -588,6 +705,9 @@
     $('#spSize').value = sp.tamano || 'Mediano'; $('#spPort').value = sp.puerto || 'Tipo 2'; $('#spPow').value = String(sp.pow || 7.4);
     $('#spCond').value = sp.condiciones || ''; $('#spPrecio').value = sp.precio || ''; $('#spFee').value = sp.serviceFee || ''; $('#spDesc').value = sp.discount || '';
     $('#spBreb').value = sp.breb || ''; $('#spTitular').value = sp.titular || '';
+    if ($('#spBanco')) $('#spBanco').value = sp.banco || '';
+    spotQr = null; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), sp.qr || null);
+    spotFotos = (sp.fotos || []).filter((f) => typeof f === 'string' && f); renderSpotFotos();
     const sw = $('#spVisible'); sw.classList.toggle('is-on', sp.visible !== false); sw.setAttribute('aria-checked', String(sp.visible !== false));
   }
   async function savePuesto() {
@@ -601,15 +721,21 @@
       precio: Math.max(0, Math.round(parseNum($('#spPrecio').value))) || settings.pricePerKwh,
       serviceFee: Math.max(0, Math.round(parseNum($('#spFee').value))), discount: Math.max(0, Math.round(parseNum($('#spDesc').value))),
       breb: $('#spBreb').value.trim(), titular: $('#spTitular').value.trim(),
+      banco: $('#spBanco') ? $('#spBanco').value : '',
       dias: (myStationDoc && myStationDoc.dias) || spDias.slice(),
       desde: (myStationDoc && myStationDoc.desde) || '07:00', hasta: (myStationDoc && myStationDoc.hasta) || '21:00',
-      fotos: (myStationDoc && myStationDoc.fotos) || [], visible: $('#spVisible').classList.contains('is-on')
+      fotos: spotFotos.slice(), visible: $('#spVisible').classList.contains('is-on')
     };
+    if (spotQr !== null) data.qr = spotQr; // '' quita el QR, dataURL lo guarda
+    // Un documento de Firestore no puede pasar de 1 MB: las imágenes van embebidas.
+    const peso = spotFotos.reduce((a, f) => a + f.length, 0) + (data.qr ? data.qr.length : 0);
+    if (peso > 850000) { toast('Las fotos pesan demasiado juntas. Quita una e intenta de nuevo.', 'error'); return; }
     try {
       $('#spSave').disabled = true; $('#spSave').textContent = 'Publicando…';
       const id = await VB.publishStation(data, myStationDoc && myStationDoc.id);
       myStationDoc = Object.assign({ id }, myStationDoc || {}, data);
       renderPuesto();
+      successPop();
       toast('¡Tu puesto quedó publicado en MontReal! ⚡');
     } catch (e) { toast('No se pudo publicar: ' + e.message, 'error'); }
     finally { $('#spSave').disabled = false; $('#spSave').innerHTML = '<span class="btn-glow"></span>Publicar mi puesto'; }
@@ -693,8 +819,506 @@
     if (!rateCtx) return; if (!rateStars) { toast('Elige de 1 a 5 estrellas', 'error'); return; }
     try {
       await VB.submitRating({ bookingId: rateCtx.bookingId || null, stationId: rateCtx.stationId || null, stars: rateStars, comment: $('#rtComment').value.trim().slice(0, 300), tipo: rateCtx.tipo });
-      closeSheet('#rateSheet'); toast('¡Gracias por calificar! ⭐');
+      closeSheet('#rateSheet'); successPop(); toast('¡Gracias por calificar! ⭐');
     } catch (e) { toast('No se pudo enviar', 'error'); }
+  }
+
+  /* =========================================================
+     Imágenes / QR de pago
+     ========================================================= */
+  function compressImageFile(file, maxSize, quality) {
+    return new Promise((resolve, reject) => {
+      if (!file || !/^image\//.test(file.type)) { reject(new Error('no-image')); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, (maxSize || 480) / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+          const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+          resolve(cv.toDataURL('image/jpeg', quality || 0.72));
+        };
+        img.onerror = () => reject(new Error('img'));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error('read'));
+      reader.readAsDataURL(file);
+    });
+  }
+  function qrShow(previewEl, imgEl, pickEl, dataUrl) {
+    if (!previewEl) return;
+    if (dataUrl) { imgEl.src = dataUrl; previewEl.classList.remove('hidden'); pickEl.classList.add('hidden'); }
+    else { previewEl.classList.add('hidden'); pickEl.classList.remove('hidden'); }
+  }
+  /* ---------- Fotos del puesto ---------- */
+  function renderSpotFotos() {
+    const grid = $('#spFotoGrid'), pick = $('#spFotoPick');
+    if (!grid) return;
+    grid.classList.toggle('hidden', !spotFotos.length);
+    grid.innerHTML = spotFotos.map((src, i) =>
+      `<div class="foto-thumb"><img src="${escapeHtml(src)}" alt="Foto ${i + 1} del puesto"/><button type="button" class="foto-del" data-foto="${i}" aria-label="Quitar esta foto">✕</button></div>`).join('');
+    if (pick) {
+      pick.classList.toggle('hidden', spotFotos.length >= MAX_FOTOS);
+      const main = pick.querySelector('.qr-drop-main');
+      if (main) main.textContent = spotFotos.length ? 'Agregar otra foto' : 'Agregar fotos';
+    }
+    $$('#spFotoGrid .foto-del').forEach((b) => b.addEventListener('click', () => { spotFotos.splice(+b.dataset.foto, 1); renderSpotFotos(); }));
+  }
+  async function addSpotFotos(files) {
+    const libres = MAX_FOTOS - spotFotos.length;
+    if (libres <= 0) { toast('Ya tienes el máximo de ' + MAX_FOTOS + ' fotos', 'error'); return; }
+    let ok = 0;
+    for (const f of Array.from(files).slice(0, libres)) {
+      try { spotFotos.push(await compressImageFile(f, 720, 0.6)); ok++; } catch (e) { /* archivo no válido */ }
+    }
+    renderSpotFotos();
+    toast(ok ? (ok === 1 ? 'Foto agregada 📷' : ok + ' fotos agregadas 📷') : 'No pudimos procesar esas imágenes', ok ? undefined : 'error');
+  }
+  function findStation(id) { return stations.find((s) => s.id === id) || allStations.find((s) => s.id === id) || null; }
+  function openQrView(opts) {
+    const c = $('#qrViewContent');
+    const img = opts.qr ? `<img class="qr-big" src="${escapeHtml(opts.qr)}" alt="QR de pago"/>` : `<div class="qr-none">Este puesto no tiene QR. Usa la llave Bre-B para transferir.</div>`;
+    c.innerHTML = `
+      <div class="qr-view-head"><div class="bk-name">Pago con Bre-B</div><div class="bk-sub">${escapeHtml(opts.stationName || '')}</div></div>
+      ${img}
+      <div class="qr-pay-info">
+        <div class="qr-pay-row"><span>Llave Bre-B</span><b>${escapeHtml(opts.breb || '—')}</b></div>
+        ${opts.banco ? `<div class="qr-pay-row"><span>Banco</span><b>${escapeHtml(opts.banco)}</b></div>` : ''}
+        <div class="qr-pay-row"><span>Titular</span><b>${escapeHtml(opts.titular || opts.ownerName || '—')}</b></div>
+      </div>
+      ${opts.breb ? `<button class="btn-secondary btn-block" id="qrCopy" type="button">Copiar llave Bre-B</button>` : ''}
+      <p class="hint" style="text-align:center;margin-top:8px">Abre tu banco, escanea el QR o usa la llave, y transfiere el total acordado.</p>`;
+    openSheet('#qrSheet');
+    if (opts.breb) $('#qrCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(opts.breb); toast('Llave copiada 📋'); } catch (e) {} });
+  }
+
+  /* =========================================================
+     ADMINISTRACIÓN DEL CONJUNTO
+     ========================================================= */
+  function demoAllBookings() {
+    const mk = (id, st, drv, du, kwh, estado, daysAgo) => ({
+      id, stationId: st.id, stationName: st.nombre, ownerUid: st.ownerUid, ownerName: st.ownerName,
+      driverUid: du, driverName: drv, torre: st.torre, kwhEst: kwh, precio: st.precio,
+      total: Math.round(kwh * st.precio), estado,
+      createdAt: { seconds: Math.floor((Date.now() - daysAgo * 864e5) / 1000) },
+      fecha: ymd(addDays(new Date(), -daysAgo)), from: '18:00', to: '21:00'
+    });
+    const S = DEMO_STATIONS;
+    return [
+      mk('d1', S[0], 'Laura Mesa', 'u-laura', 18, 'completada', 6),
+      mk('d2', S[1], 'Carlos Ruiz', 'u-carlos', 12, 'completada', 5),
+      mk('d3', S[0], 'Diego Salas', 'u-diego', 22, 'completada', 4),
+      mk('d4', S[2], 'Ana Gómez', 'u-ana', 30, 'confirmada', 3),
+      mk('d5', S[3], 'Sofía Peña', 'u-sofia', 15, 'completada', 2),
+      mk('d6', S[0], 'Carlos Ruiz', 'u-carlos', 20, 'confirmada', 1),
+      mk('d7', S[4], 'Laura Mesa', 'u-laura', 25, 'completada', 1),
+      mk('d8', S[2], 'Diego Salas', 'u-diego', 10, 'pendiente', 0),
+      mk('d9', S[0], 'Ana Gómez', 'u-ana', 16, 'completada', 0)
+    ];
+  }
+  // Cargas medidas de ejemplo (solo modo prueba local) para ver el panel con datos.
+  function demoSessions() {
+    const S = DEMO_STATIONS;
+    const mk = (st, drv, kwh, daysAgo, pagado) => ({
+      id: 'ds' + daysAgo + drv.length, ownerUid: st.ownerUid, ownerName: st.ownerName,
+      stationId: st.id, stationName: st.nombre, torrePuesto: st.torre, torre: st.torre,
+      driverName: drv, kwh, pricePerKwh: st.precio, total: Math.round(kwh * st.precio),
+      dateISO: addDays(new Date(), -daysAgo).toISOString(), pagado
+    });
+    return [
+      mk(S[0], 'Laura Mesa', 19.4, 2, true), mk(S[1], 'Ana Gómez', 11.2, 3, true),
+      mk(S[2], 'Diego Salas', 27.8, 5, false), mk(S[0], 'Carlos Ruiz', 15.6, 9, true),
+      mk(S[3], 'Sofía Peña', 22.1, 12, false), mk(S[4], 'Laura Mesa', 8.9, 34, true),
+      mk(S[0], 'Ana Gómez', 17.3, 38, true), mk(S[2], 'Carlos Ruiz', 24.5, 41, true)
+    ];
+  }
+  const panelBookings = () => (allBookings.length ? allBookings : (devAdmin() ? demoAllBookings() : []));
+  const panelStations = () => (allStations.length ? allStations : (devAdmin() ? DEMO_STATIONS.map((s) => Object.assign({}, s, { common: s.ownerName === 'Administración' })) : []));
+  const panelUsers = () => (allUsers.length ? allUsers : (devAdmin() ? DEMO_USERS : []));
+  const panelSessions = () => (allSessions.length ? allSessions : (devAdmin() ? demoSessions() : []));
+
+  /* ---------- Historial unificado del conjunto ----------
+     Dos fuentes: las cargas medidas con el contador (reales) y las reservas
+     agendadas (estimadas). Una reserva con carga medida encima ya trae 'kwhReal',
+     así que se excluye para no contarla dos veces.                             */
+  function mergedEvents() {
+    const cargas = panelSessions().map((s) => ({
+      origen: 'carga',
+      fecha: s.dateISO ? ymd(new Date(s.dateISO)) : ymd(tsDate(s.at)),
+      torre: String(s.torrePuesto || s.torre || '—') || '—',
+      stationId: s.stationId || '',
+      puesto: s.stationName || 'Carga por contador',
+      anfitrion: s.ownerName || '',
+      vecino: s.driverName || 'Sin nombre',
+      kwh: s.kwh || 0, precio: s.pricePerKwh || 0, total: s.total || 0,
+      pagado: !!s.pagado
+    }));
+    const reservas = panelBookings()
+      .filter((b) => (b.estado === 'confirmada' || b.estado === 'completada') && !b.kwhReal)
+      .map((b) => ({
+        origen: 'reserva',
+        fecha: b.fecha || ymd(tsDate(b.createdAt)),
+        torre: String(b.torre || '—') || '—',
+        stationId: b.stationId || '',
+        puesto: b.stationName || 'Puesto',
+        anfitrion: b.ownerName || '',
+        vecino: b.driverName || 'Sin nombre',
+        kwh: b.kwhEst || 0, precio: b.precio || 0, total: b.total || 0,
+        pagado: !!b.pagado
+      }));
+    return cargas.concat(reservas).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  }
+  function sumEvents(list) {
+    return list.reduce((a, e) => {
+      a.ingresos += e.total; a.kwh += e.kwh; a.count++;
+      if (e.pagado) a.pagado += e.total; else a.pendiente += e.total;
+      return a;
+    }, { ingresos: 0, kwh: 0, count: 0, pagado: 0, pendiente: 0 });
+  }
+
+  function countUp(el, to, fmt, dur) {
+    const d = dur || 800;
+    if (!settings.animations || prefersReduced() || document.visibilityState === 'hidden') { el.textContent = fmt(to); return; }
+    const t0 = performance.now();
+    let done = false;
+    const settle = () => { if (!done) { done = true; el.textContent = fmt(to); } };
+    (function step(now) {
+      const p = clamp((now - t0) / d, 0, 1);
+      if (done) return;
+      el.textContent = fmt(to * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(step); else settle();
+    })(performance.now());
+    // Red de seguridad: si rAF no corre (pestaña oculta, equipo lento) el dato
+    // nunca se queda en cero — siempre termina mostrando el valor real.
+    setTimeout(settle, d + 120);
+  }
+  function adminStats() {
+    const t = sumEvents(mergedEvents());
+    return {
+      ingresos: t.ingresos, kwh: t.kwh, cargas: t.count, pendiente: t.pendiente,
+      reservas: panelBookings().length,
+      puestos: panelStations().length
+    };
+  }
+  function renderAdminMetrics() {
+    const st = adminStats(), wrap = $('#admMetrics');
+    const cards = [
+      { ico: '💰', label: 'Ingresos', val: st.ingresos, fmt: (v) => fmtCOP(v) },
+      { ico: '⚡', label: 'Energía', val: st.kwh, fmt: (v) => fmtKwh(v) + ' kWh' },
+      { ico: '🔋', label: 'Cargas', val: st.cargas, fmt: (v) => fmtNum(Math.round(v)) },
+      { ico: '💵', label: 'Por cobrar', val: st.pendiente, fmt: (v) => fmtCOP(v) },
+      { ico: '🗓️', label: 'Reservas', val: st.reservas, fmt: (v) => fmtNum(Math.round(v)) },
+      { ico: '🔌', label: 'Puestos', val: st.puestos, fmt: (v) => fmtNum(Math.round(v)) }
+    ];
+    wrap.innerHTML = cards.map((c, i) => `<div class="metric-card stagger" style="--i:${i}"><span class="metric-ico">${c.ico}</span><b class="metric-val" data-i="${i}">${c.fmt(0)}</b><span class="metric-label">${c.label}</span></div>`).join('');
+    cards.forEach((c, i) => { const el = wrap.querySelector('.metric-val[data-i="' + i + '"]'); if (el) countUp(el, c.val, c.fmt, 900); });
+  }
+  function adminDailyBuckets(events) {
+    const days = [], now = new Date();
+    for (let i = 7; i >= 0; i--) { const d = addDays(now, -i); days.push({ key: ymd(d), label: d.getDate() + ' ' + d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''), cop: 0, kwh: 0, count: 0 }); }
+    events.forEach((e) => {
+      const bucket = days.find((x) => x.key === e.fecha);
+      if (bucket) { bucket.cop += e.total; bucket.kwh += e.kwh; bucket.count++; }
+    });
+    return days;
+  }
+  function renderAdminChart() {
+    const A = $('#admChartA'); if (!A) return; A.classList.remove('chart-in'); A.innerHTML = '';
+    const bk = adminDailyBuckets(mergedEvents()), metric = admChart.metric;
+    drawBars(A, bk, metric);
+    const tot = bk.reduce((a, b) => a + (metric === 'cop' ? b.cop : b.kwh), 0);
+    $('#admChartFootA').innerHTML = `<span>Total del período</span><b>${metric === 'cop' ? fmtCOP(tot) : fmtKwh(tot) + ' kWh'}</b>`;
+    const rev = () => A.classList.add('chart-in'); requestAnimationFrame(() => requestAnimationFrame(rev)); setTimeout(rev, 120);
+  }
+  function renderTopSpots() {
+    const counts = {};
+    mergedEvents().forEach((e) => {
+      const k = e.stationId || e.puesto;
+      const c = counts[k] || (counts[k] = { id: k, name: e.puesto, count: 0 });
+      c.count++;
+    });
+    const list = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 6);
+    const ul = $('#admTopList'); ul.innerHTML = '';
+    $('#admTopEmpty').classList.toggle('hidden', list.length > 0);
+    const max = list.length ? list[0].count : 1;
+    list.forEach((c, i) => {
+      const li = document.createElement('li'); li.className = 'rank-item stagger'; li.style.setProperty('--i', i);
+      li.innerHTML = `<span class="rank-pos">${i + 1}</span><div class="rank-main"><div class="rank-name">${escapeHtml(c.name)}</div><div class="rank-bar"><i style="width:${Math.round(c.count / max * 100)}%"></i></div></div><div class="rank-val"><b>${c.count}</b><small>${c.count === 1 ? 'reserva' : 'reservas'}</small></div>`;
+      ul.appendChild(li);
+    });
+  }
+  function renderCommonSpots() {
+    const spots = panelStations().filter((s) => s.common);
+    const ul = $('#admSpotsList'); ul.innerHTML = '';
+    $('#admSpotsEmpty').classList.toggle('hidden', spots.length > 0);
+    spots.forEach((sp, i) => {
+      const li = document.createElement('li'); li.className = 'book-card stagger'; li.style.setProperty('--i', i);
+      li.innerHTML = `<div class="bk-top"><div><div class="bk-name">${escapeHtml(sp.nombre)}</div><div class="bk-sub">🅿️ ${escapeHtml(sp.numeroParqueadero || '—')} · ${escapeHtml(sp.puerto || '')} · ${(sp.pow || 0)} kW</div></div><span class="bk-pill ${sp.visible !== false ? 'p-ok' : 'p-dim'}">${sp.visible !== false ? 'Visible' : 'Oculto'}</span></div>
+        <div class="bk-meta"><span>💰 ${fmtCOP(sp.precio || 0)}/kWh</span><span>🕐 ${escapeHtml(sp.desde || '—')}–${escapeHtml(sp.hasta || '—')}</span>${sp.breb ? `<span>💳 ${escapeHtml(sp.breb)}</span>` : ''}</div>
+        <div class="bk-actions"><button class="btn-ghost btn-sm" data-edit="${escapeHtml(sp.id)}">Editar</button><button class="btn-ghost btn-sm btn-danger" data-del="${escapeHtml(sp.id)}">Eliminar</button></div>`;
+      ul.appendChild(li);
+    });
+    $$('#admSpotsList [data-edit]').forEach((b) => b.addEventListener('click', () => openAdminSpot(b.dataset.edit)));
+    $$('#admSpotsList [data-del]').forEach((b) => b.addEventListener('click', () => deleteAdminSpot(b.dataset.del)));
+  }
+  function renderPanel() {
+    if (!isAdmin()) return;
+    renderAdminMetrics(); renderAdminChart(); renderReporte(); renderTopSpots(); renderCommonSpots();
+  }
+
+  /* =========================================================
+     Reporte mensual para la administración (PDF / CSV)
+     ========================================================= */
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const monthKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  function monthLabel(key) {
+    const p = String(key).split('-'), m = MESES[(+p[1]) - 1] || '';
+    return (m ? m[0].toUpperCase() + m.slice(1) : key) + ' de ' + p[0];
+  }
+  // Los 12 meses recientes más cualquier mes que tenga movimientos.
+  function availableMonths() {
+    const set = {}, now = new Date();
+    for (let i = 0; i < 12; i++) set[monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1))] = 1;
+    mergedEvents().forEach((e) => { if (e.fecha) set[String(e.fecha).slice(0, 7)] = 1; });
+    return Object.keys(set).sort().reverse();
+  }
+  function buildReporte(key) {
+    const evs = mergedEvents().filter((e) => String(e.fecha).slice(0, 7) === key);
+    const tot = sumEvents(evs);
+
+    const torres = {};
+    evs.forEach((e) => {
+      const t = torres[e.torre] || (torres[e.torre] = { torre: e.torre, count: 0, kwh: 0, ingresos: 0, pagado: 0, pendiente: 0 });
+      t.count++; t.kwh += e.kwh; t.ingresos += e.total;
+      if (e.pagado) t.pagado += e.total; else t.pendiente += e.total;
+    });
+    const torreRows = Object.values(torres).sort((a, b) => b.ingresos - a.ingresos)
+      .map((t) => [(t.torre === '—' ? 'Sin torre' : 'Torre ' + t.torre), t.count, t.kwh, t.ingresos, t.pagado, t.pendiente]);
+
+    const puestos = {};
+    evs.forEach((e) => {
+      const k = e.stationId || e.puesto;
+      const p = puestos[k] || (puestos[k] = { nombre: e.puesto, anfitrion: e.anfitrion, count: 0, kwh: 0, ingresos: 0 });
+      p.count++; p.kwh += e.kwh; p.ingresos += e.total;
+    });
+    const puestoRows = Object.values(puestos).sort((a, b) => b.ingresos - a.ingresos)
+      .map((p) => [p.nombre, p.anfitrion || '—', p.count, p.kwh, p.ingresos]);
+
+    const detRows = evs.slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).map((e) => {
+      const d = parseYmd(e.fecha);
+      return [String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'),
+        e.puesto, e.vecino, e.kwh, e.precio, e.total, e.pagado ? 'Pagado' : 'Por cobrar'];
+    });
+    const vecinos = Object.keys(evs.reduce((a, e) => { a[e.vecino] = 1; return a; }, {})).length;
+
+    return {
+      titulo: 'Reporte mensual de carga eléctrica',
+      conjunto: 'Conjunto MontReal',
+      periodo: monthLabel(key),
+      generado: new Date().toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }),
+      nota: 'Las cargas medidas con el contador se toman como consumo real; las reservas sin medición se valoran con los kWh acordados. "Por cobrar" es lo que el anfitrión todavía no ha confirmado como recibido.',
+      resumen: [
+        { label: 'Ingresos del mes', fmt: 'cop', value: tot.ingresos },
+        { label: 'Energía entregada (kWh)', fmt: 'dec1', value: tot.kwh },
+        { label: 'Cargas registradas', fmt: 'int', value: tot.count },
+        { label: 'Por cobrar', fmt: 'cop', value: tot.pendiente },
+        { label: 'Puestos activos', fmt: 'int', value: Object.keys(puestos).length },
+        { label: 'Vecinos que cargaron', fmt: 'int', value: vecinos }
+      ],
+      tablas: [
+        { titulo: 'Consumo e ingresos por torre', cols: ['Torre', 'Cargas', 'kWh', 'Ingresos', 'Pagado', 'Por cobrar'], fmt: ['text', 'int', 'dec1', 'cop', 'cop', 'cop'], w: [1.5, 0.85, 0.95, 1.25, 1.25, 1.25], rows: torreRows, total: ['Total', tot.count, tot.kwh, tot.ingresos, tot.pagado, tot.pendiente] },
+        { titulo: 'Detalle por puesto', cols: ['Puesto', 'Anfitrión', 'Cargas', 'kWh', 'Ingresos'], fmt: ['text', 'text', 'int', 'dec1', 'cop'], w: [2.2, 1.6, 0.8, 0.9, 1.2], rows: puestoRows },
+        { titulo: 'Detalle de cargas', cols: ['Fecha', 'Puesto', 'Vecino', 'kWh', '$/kWh', 'Total', 'Pago'], fmt: ['text', 'text', 'text', 'dec1', 'cop', 'cop', 'text'], w: [0.75, 2, 1.5, 0.75, 0.9, 1.05, 0.95], rows: detRows }
+      ],
+      _tot: tot, _torres: torreRows
+    };
+  }
+  function renderReporte() {
+    const sel = $('#admRepMonth'); if (!sel) return;
+    const months = availableMonths();
+    if (!repState.month || months.indexOf(repState.month) < 0) repState.month = months[0];
+    sel.innerHTML = months.map((k) => `<option value="${k}"${k === repState.month ? ' selected' : ''}>${escapeHtml(monthLabel(k))}</option>`).join('');
+
+    const rep = buildReporte(repState.month), t = rep._tot;
+    $('#admRepOrigen').textContent = t.count ? (t.count === 1 ? '1 movimiento' : t.count + ' movimientos') : '';
+    $('#admRepKpis').innerHTML = [
+      ['Ingresos', fmtCOP(t.ingresos)], ['Energía', fmtKwh(t.kwh) + ' kWh'],
+      ['Pagado', fmtCOP(t.pagado)], ['Por cobrar', fmtCOP(t.pendiente)]
+    ].map(([l, v]) => `<div class="rep-kpi"><span>${l}</span><b>${v}</b></div>`).join('');
+
+    const tbl = $('#admRepTable'), empty = $('#admRepEmpty'), has = rep._torres.length > 0;
+    tbl.classList.toggle('hidden', !has); empty.classList.toggle('hidden', has);
+    if (has) {
+      tbl.innerHTML = '<thead><tr><th>Torre</th><th>Cargas</th><th>kWh</th><th>Ingresos</th><th>Por cobrar</th></tr></thead><tbody>' +
+        rep._torres.map((r) => `<tr><td>${escapeHtml(r[0])}</td><td>${fmtNum(r[1])}</td><td>${fmtKwh(r[2])}</td><td>${fmtCOP(r[3])}</td><td>${fmtCOP(r[5])}</td></tr>`).join('') +
+        `</tbody><tfoot><tr><td>Total</td><td>${fmtNum(t.count)}</td><td>${fmtKwh(t.kwh)}</td><td>${fmtCOP(t.ingresos)}</td><td>${fmtCOP(t.pendiente)}</td></tr></tfoot>`;
+    }
+  }
+  function downloadReporte(kind) {
+    if (!window.VReporte) { toast('El módulo de reportes no cargó. Recarga la página.', 'error'); return; }
+    const rep = buildReporte(repState.month);
+    if (!rep._tot.count) { toast('Ese mes no tiene movimientos', 'error'); return; }
+    const name = 'voltio-montreal-' + repState.month + '.' + (kind === 'pdf' ? 'pdf' : 'csv');
+    try {
+      if (kind === 'pdf') { download(name, window.VReporte.pdf(rep), 'application/pdf'); toast('Reporte en PDF descargado 📄'); }
+      else { download(name, window.VReporte.csv(rep), 'text/csv;charset=utf-8'); toast('Reporte en CSV descargado ⬇'); }
+      successPop();
+    } catch (e) { toast('No se pudo generar el reporte', 'error'); }
+  }
+
+  function openAdminSpot(id) {
+    const sp = id ? panelStations().find((s) => s.id === id) : null;
+    adminSpotCtx = (sp && !sp.demo) ? sp.id : null; // solo se editan puestos reales
+    spotQr = null;
+    const g = (k, d) => (sp && sp[k] != null ? sp[k] : d);
+    const opt = (v, cur) => `<option ${v === cur ? 'selected' : ''}>${v}</option>`;
+    const bancos = ['', 'Bancolombia', 'Nequi', 'Daviplata', 'Davivienda', 'BBVA', 'Banco de Bogotá', 'Nu', 'Lulo Bank', 'Banco Caja Social', 'Scotiabank Colpatria', 'Banco Popular', 'Banco de Occidente', 'Bancoomeva', 'Movii', 'Otro'];
+    $('#admSpotContent').innerHTML = `
+      <div class="login-box" style="text-align:left">
+        <h3>${sp ? 'Editar puesto común' : 'Nuevo puesto común'}</h3>
+        <p class="lg-sub">Puestos de visitantes o zonas comunes gestionados por la administración.</p>
+        <div class="field"><label for="asName">Nombre del puesto</label><div class="input-wrap"><input id="asName" type="text" value="${escapeHtml(g('nombre', ''))}" placeholder="Ej: Parqueadero de visitantes" autocomplete="off"/></div></div>
+        <div class="grid-2">
+          <div class="field"><label for="asNum">N.º parqueadero</label><div class="input-wrap"><input id="asNum" type="text" value="${escapeHtml(g('numeroParqueadero', ''))}" placeholder="P-V04" autocomplete="off"/></div></div>
+          <div class="field"><label for="asTorre">Zona / Torre</label><div class="input-wrap"><input id="asTorre" type="text" value="${escapeHtml(g('torre', ''))}" placeholder="Visitantes" autocomplete="off"/></div></div>
+          <div class="field"><label for="asPort">Puerto</label><div class="input-wrap select-wrap"><select id="asPort">${['Tipo 1', 'Tipo 2', 'CCS', 'Doméstico'].map((v) => opt(v, g('puerto', 'Tipo 2'))).join('')}</select></div></div>
+          <div class="field"><label for="asPow">Potencia (kW)</label><div class="input-wrap select-wrap"><select id="asPow">${['3.6', '7.4', '11', '22'].map((v) => `<option ${(+v === +g('pow', 7.4)) ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
+          <div class="field"><label for="asSize">Tamaño</label><div class="input-wrap select-wrap"><select id="asSize">${['Pequeño', 'Mediano', 'Grande'].map((v) => opt(v, g('tamano', 'Mediano'))).join('')}</select></div></div>
+          <div class="field"><label for="asPrecio">Precio por kWh</label><div class="input-wrap"><span class="unit unit--left">$</span><input id="asPrecio" inputmode="numeric" class="has-left" value="${escapeHtml(String(g('precio', 900)))}" autocomplete="off"/></div></div>
+          <div class="field"><label for="asDesde">Desde</label><div class="input-wrap"><input id="asDesde" type="time" value="${escapeHtml(g('desde', '06:00'))}"/></div></div>
+          <div class="field"><label for="asHasta">Hasta</label><div class="input-wrap"><input id="asHasta" type="time" value="${escapeHtml(g('hasta', '22:00'))}"/></div></div>
+        </div>
+        <h3 class="sub-h">Pago a la administración (Bre-B)</h3>
+        <div class="grid-2">
+          <div class="field"><label for="asBreb">Llave Bre-B</label><div class="input-wrap"><input id="asBreb" type="text" value="${escapeHtml(g('breb', ''))}" placeholder="@montreal.admin" autocomplete="off"/></div></div>
+          <div class="field"><label for="asTitular">Titular</label><div class="input-wrap"><input id="asTitular" type="text" value="${escapeHtml(g('titular', 'Admón. MontReal'))}" autocomplete="off"/></div></div>
+        </div>
+        <div class="field"><label for="asBanco">Banco o billetera</label><div class="input-wrap select-wrap"><select id="asBanco">${bancos.map((v) => v === '' ? `<option value="" ${!g('banco', '') ? 'selected' : ''}>Selecciona…</option>` : opt(v, g('banco', ''))).join('')}</select></div></div>
+        <div class="field ta-field">
+          <label>Código QR de pago <span class="opt">(opcional)</span></label>
+          <input id="asQrInput" type="file" accept="image/*" class="hidden"/>
+          <div class="qr-preview hidden" id="asQrPreview"><img id="asQrImg" alt="QR"/><button type="button" class="qr-remove" id="asQrRemove">✕ Quitar QR</button></div>
+          <button type="button" class="qr-drop" id="asQrPick"><span class="qr-ico">📷</span><span class="qr-drop-main">Subir imagen del QR</span><small>La comprimimos por ti.</small></button>
+        </div>
+        <div class="field ta-field"><label for="asCond">Indicaciones</label><div class="input-wrap"><textarea id="asCond" rows="2" placeholder="Ej: Avisa en portería al llegar.">${escapeHtml(g('condiciones', ''))}</textarea></div></div>
+        <div class="switch-row"><div><span class="switch-title">Visible para los vecinos</span><span class="switch-sub">Aparece en la búsqueda</span></div><button id="asVisible" class="switch ${g('visible', true) !== false ? 'is-on' : ''}" type="button" role="switch" aria-checked="${g('visible', true) !== false}"><i></i></button></div>
+        <button id="asSave" class="btn-primary" type="button" style="margin-top:16px"><span class="btn-glow"></span>${sp ? 'Guardar cambios' : 'Crear puesto'}</button>
+        <button class="btn-ghost btn-block" type="button" data-close="admSpot" style="margin-top:8px">Cancelar</button>
+      </div>`;
+    openSheet('#admSpotSheet');
+    qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), g('qr', null));
+    $('#asQrPick').addEventListener('click', () => $('#asQrInput').click());
+    $('#asQrInput').addEventListener('change', async () => { const f = $('#asQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), url); toast('QR cargado 📷'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#asQrInput').value = ''; });
+    $('#asQrRemove').addEventListener('click', () => { spotQr = ''; qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), null); });
+    $('#asVisible').addEventListener('click', () => { const sw = $('#asVisible'); sw.classList.toggle('is-on'); sw.setAttribute('aria-checked', String(sw.classList.contains('is-on'))); });
+    $('#asSave').addEventListener('click', saveAdminSpot);
+    $('#admSpotContent [data-close]').addEventListener('click', () => closeSheet('#admSpotSheet'));
+  }
+  async function saveAdminSpot() {
+    const nombre = $('#asName').value.trim();
+    if (!nombre) { toast('Ponle un nombre al puesto', 'error'); return; }
+    const data = {
+      nombre, numeroParqueadero: $('#asNum').value.trim(), torre: $('#asTorre').value.trim() || 'Visitantes',
+      puerto: $('#asPort').value, pow: parseFloat($('#asPow').value) || 7.4, tamano: $('#asSize').value,
+      precio: Math.max(0, Math.round(parseNum($('#asPrecio').value))) || 900, serviceFee: 0, discount: 0,
+      dias: [1, 1, 1, 1, 1, 1, 1], desde: $('#asDesde').value || '06:00', hasta: $('#asHasta').value || '22:00',
+      breb: $('#asBreb').value.trim(), titular: $('#asTitular').value.trim() || 'Admón. MontReal',
+      banco: $('#asBanco').value, condiciones: $('#asCond').value.trim(),
+      visible: $('#asVisible').classList.contains('is-on'), autoConfirm: true
+    };
+    if (spotQr !== null) data.qr = spotQr;
+    if (!user || devAdmin()) { toast(devAdmin() ? 'Modo prueba: no se guarda en la nube' : 'Inicia sesión como administrador', 'error'); if (devAdmin()) closeSheet('#admSpotSheet'); return; }
+    try { $('#asSave').disabled = true; await VB.saveManagedSpot(data, adminSpotCtx); closeSheet('#admSpotSheet'); successPop(); toast('Puesto guardado ✅'); }
+    catch (e) { toast('No se pudo guardar: ' + (e.message || ''), 'error'); }
+    finally { const b = $('#asSave'); if (b) b.disabled = false; }
+  }
+  function deleteAdminSpot(id) {
+    const sp = panelStations().find((s) => s.id === id); if (!sp) return;
+    if (!confirm('¿Eliminar "' + (sp.nombre || 'este puesto') + '"?')) return;
+    if (sp.demo || devAdmin() || !user) { toast('Puesto de ejemplo: no se elimina en modo prueba'); return; }
+    VB.deleteStation(id).then(() => toast('Puesto eliminado')).catch(() => toast('No se pudo eliminar', 'error'));
+  }
+
+  /* ---------- Usuarios (admin) ---------- */
+  function renderUsers() {
+    if (VB && user && myProfile && myProfile.role === 'admin' && !allUsers.length && !renderUsers._loading) {
+      renderUsers._loading = true;
+      VB.listUsers().then((l) => { renderUsers._loading = false; if (l && l.length) { allUsers = l; drawUsers(); } }).catch(() => { renderUsers._loading = false; });
+    }
+    drawUsers();
+  }
+  function drawUsers() {
+    const term = ($('#admUserSearch') && $('#admUserSearch').value || '').trim().toLowerCase();
+    let list = panelUsers().slice().sort((a, b) => (b.role === 'admin' ? 1 : 0) - (a.role === 'admin' ? 1 : 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    if (term) list = list.filter((u) => [u.name, u.email, u.phone, u.torre, u.apto].some((f) => String(f || '').toLowerCase().includes(term)));
+    $('#admUserCount').textContent = list.length + (list.length === 1 ? ' residente' : ' residentes');
+    const ul = $('#admUsersList'); ul.innerHTML = '';
+    $('#admUsersEmpty').classList.toggle('hidden', list.length > 0);
+    if (!list.length) { $('#admUsersEmpty').innerHTML = '<div class="empty-icon">👥</div><p>' + (term ? 'Sin resultados.' : 'Aún no hay residentes registrados.') + '</p>'; }
+    list.forEach((u, i) => {
+      const li = document.createElement('li'); li.className = 'user-row stagger'; li.style.setProperty('--i', i);
+      const initials = String(u.name || u.email || 'U').trim().charAt(0).toUpperCase();
+      const loc = [u.torre && u.torre !== '—' ? 'Torre ' + u.torre : null, u.apto && u.apto !== '—' ? 'Apto ' + u.apto : null].filter(Boolean).join(' · ') || 'Sin ubicación';
+      li.innerHTML = `<span class="user-av">${escapeHtml(initials)}</span><div class="user-main"><div class="user-name">${escapeHtml(u.name || 'Sin nombre')}${u.role === 'admin' ? ' <span class="sc-badge b-ver">Admin</span>' : ''}</div><div class="user-sub">${escapeHtml(u.email || '')}</div><div class="user-loc">🏢 ${escapeHtml(loc)}${u.phone ? ' · 📱 ' + escapeHtml(u.phone) : ''}</div></div><button class="btn-ghost btn-sm user-manage" data-uid="${escapeHtml(u.uid)}">Gestionar</button>`;
+      ul.appendChild(li);
+    });
+    $$('#admUsersList .user-manage').forEach((b) => b.addEventListener('click', () => openUserSheet(b.dataset.uid)));
+  }
+  function openUserSheet(uid) {
+    const u = panelUsers().find((x) => x.uid === uid); if (!u) return;
+    userCtx = u;
+    const loc = [u.torre && u.torre !== '—' ? 'Torre ' + u.torre : null, u.apto && u.apto !== '—' ? 'Apto ' + u.apto : null].filter(Boolean).join(' · ') || '—';
+    let chosen = u.role === 'admin' ? 'admin' : 'guest';
+    $('#userSheetContent').innerHTML = `
+      <div class="login-box" style="text-align:left">
+        <div class="user-detail-head"><span class="user-av user-av--big">${escapeHtml(String(u.name || u.email || 'U').charAt(0).toUpperCase())}</span><div><div class="bk-name">${escapeHtml(u.name || 'Sin nombre')}</div><div class="bk-sub">${escapeHtml(u.email || '')}</div></div></div>
+        <div class="user-detail-grid">
+          <div class="udg"><span>📱 Celular</span><b>${escapeHtml(u.phone || '—')}</b></div>
+          <div class="udg"><span>🏢 Ubicación</span><b>${escapeHtml(loc)}</b></div>
+          <div class="udg"><span>✉️ Verificado</span><b>${u.emailVerified ? 'Sí' : 'No'}</b></div>
+          <div class="udg"><span>🔑 Rol actual</span><b>${u.role === 'admin' ? 'Administrador' : 'Residente'}</b></div>
+        </div>
+        <h3 class="sub-h" style="margin-top:16px">Rol en el conjunto</h3>
+        <div class="segmented" id="urRole">
+          <button class="seg-btn ${u.role !== 'admin' ? 'is-active' : ''}" data-role="guest" type="button">🏠 Residente</button>
+          <button class="seg-btn ${u.role === 'admin' ? 'is-active' : ''}" data-role="admin" type="button">✦ Administrador</button>
+        </div>
+        <p class="hint">Un administrador accede al panel del conjunto, las métricas y la gestión de usuarios.</p>
+        <button id="urSave" class="btn-secondary btn-block" type="button">Guardar rol</button>
+        <button class="btn-ghost btn-block" type="button" data-close="user" style="margin-top:8px">Cerrar</button>
+      </div>`;
+    openSheet('#userSheet');
+    $$('#urRole .seg-btn').forEach((b) => b.addEventListener('click', () => { chosen = b.dataset.role; $$('#urRole .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b)); }));
+    $('#urSave').addEventListener('click', () => changeUserRole(u, chosen));
+    $('#userSheetContent [data-close]').addEventListener('click', () => closeSheet('#userSheet'));
+  }
+  function changeUserRole(u, role) {
+    if (role === (u.role === 'admin' ? 'admin' : 'guest')) { closeSheet('#userSheet'); return; }
+    if (u.uid === (VB && VB.uid()) && role !== 'admin' && !confirm('Vas a quitarte a ti mismo el rol de administrador. ¿Continuar?')) return;
+    if (devAdmin() || !user || String(u.uid).startsWith('u-')) { toast('Modo prueba: cambio de rol simulado'); closeSheet('#userSheet'); return; }
+    VB.setUserRole(u.uid, role).then(() => { closeSheet('#userSheet'); successPop(); toast('Rol actualizado ✅'); })
+      .catch(() => toast('No se pudo cambiar el rol', 'error'));
+  }
+
+  /* ---------- Perfil del residente + ajustes admin ---------- */
+  function loadProfileUI() {
+    if (!$('#pfPhone')) return;
+    const p = myProfile || {};
+    $('#pfPhone').value = p.phone || '';
+    $('#pfTorre').value = (p.torre && p.torre !== '—') ? p.torre : '';
+    $('#pfApto').value = (p.apto && p.apto !== '—') ? p.apto : '';
+  }
+  async function saveProfileHandler() {
+    if (!user) { needLogin(); return; }
+    const patch = { phone: $('#pfPhone').value.trim(), torre: $('#pfTorre').value.trim(), apto: $('#pfApto').value.trim() };
+    try { $('#pfSave').disabled = true; await VB.saveProfile(patch); successPop(); toast('Información guardada ✅'); }
+    catch (e) { toast('No se pudo guardar', 'error'); }
+    finally { $('#pfSave').disabled = false; }
+  }
+  function loadAdminSettingsUI() {
+    const sw = $('#adminAsGuest'); if (!sw) return;
+    sw.classList.toggle('is-on', adminAsGuest); sw.setAttribute('aria-checked', String(adminAsGuest));
   }
 
   /* =========================================================
@@ -712,6 +1336,31 @@
     t.innerHTML = `<span class="t-ico">${type === 'error' ? '!' : '✓'}</span><span>${escapeHtml(msg)}</span>`;
     w.appendChild(t);
     setTimeout(() => { t.classList.add('is-out'); setTimeout(() => t.remove(), 300); }, 2800);
+  }
+
+  /* ---------- Micro-interacciones ---------- */
+  const RIPPLE_SEL = '.btn-primary,.btn-secondary,.btn-ok,.chip,.seg-btn,.reason-btn,.role-card,.g-btn,.user-manage,.star-btn';
+  function addRipple(e) {
+    if (!settings.animations || prefersReduced()) return;
+    const btn = e.target.closest(RIPPLE_SEL);
+    if (!btn || btn.disabled) return;
+    const r = btn.getBoundingClientRect(); if (r.width < 8) return;
+    btn.classList.add('ripple-host');
+    const ink = document.createElement('span'); ink.className = 'ripple-ink';
+    const size = Math.max(r.width, r.height);
+    ink.style.width = ink.style.height = size + 'px';
+    ink.style.left = ((e.clientX != null ? e.clientX : r.left + r.width / 2) - r.left - size / 2) + 'px';
+    ink.style.top = ((e.clientY != null ? e.clientY : r.top + r.height / 2) - r.top - size / 2) + 'px';
+    btn.appendChild(ink);
+    setTimeout(() => ink.remove(), 640);
+  }
+  function successPop() {
+    if (navigator.vibrate) { try { navigator.vibrate([18, 28, 40]); } catch (e) {} }
+    if (!settings.animations || prefersReduced()) return;
+    const el = document.createElement('div'); el.className = 'success-pop';
+    el.innerHTML = '<div class="sp-circle"><svg viewBox="0 0 24 24"><path class="sp-check" d="M5 13l4 4L19 7"/></svg></div>';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1120);
   }
 
   /* ============================================================================
@@ -821,20 +1470,103 @@
     if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) {} }
   }
   function saveSession(c) { const s = Object.assign({ id: uid8('s'), dateISO: c.dateISO || new Date().toISOString() }, c); sessions.unshift(s); persistSessions(); return s; }
+
+  /* ---------- Historial real: las cargas también viven en la nube ---------- */
+  // Lo que se guarda en Firestore de cada carga medida (sin datos de más).
+  function sessionPayload(s) {
+    return {
+      dateISO: s.dateISO,
+      driverName: s.driverName || '', carModel: s.carModel || '',
+      torre: s.torre != null ? String(s.torre) : '', apto: s.apto != null ? String(s.apto) : '',
+      torrePuesto: s.torrePuesto || '',
+      stationId: s.stationId || '', stationName: s.stationName || '',
+      kwh: round2(s.kwh), pricePerKwh: Math.round(s.pricePerKwh || 0),
+      serviceFee: Math.round(s.serviceFee || 0), discount: Math.round(s.discount || 0),
+      total: Math.round(s.total || 0),
+      bookingId: s.bookingId || null, pagado: !!s.pagado
+    };
+  }
+  async function pushSession(s) {
+    if (!VB || !user) return null;
+    const id = await VB.saveChargeSession(sessionPayload(s));
+    s.remoteId = id; persistSessions();
+    // Si viene de una reserva, la cerramos con los kWh reales (así el panel no la cuenta dos veces)
+    if (s.bookingId) {
+      try {
+        await VB.updateBooking(s.bookingId, {
+          estado: 'completada', kwhReal: round2(s.kwh),
+          totalReal: Math.round(s.total || 0), sessionId: id
+        });
+      } catch (e) { /* la carga ya quedó guardada; la reserva se puede cerrar a mano */ }
+    }
+    return id;
+  }
+  // Sube de una sola vez las cargas que quedaron solo en el dispositivo.
+  async function syncPendingSessions() {
+    if (!VB || !user || syncDone) return;
+    syncDone = true;
+    const pend = sessions.filter((s) => !s.remoteId).slice(0, 60);
+    if (!pend.length) return;
+    let ok = 0;
+    for (const s of pend) {
+      try { await pushSession(s); ok++; } catch (e) { syncDone = false; break; }
+    }
+    if (ok) {
+      persistSessions();
+      toast(ok === 1 ? 'Carga sincronizada con el conjunto ☁️' : ok + ' cargas sincronizadas con el conjunto ☁️');
+      if (currentView === 'analisis') renderHistory();
+    }
+  }
+  // Reservas del anfitrión que aún no tienen una carga medida asociada.
+  const linkableBookings = () => myRequests.filter((r) => (r.estado === 'confirmada' || r.estado === 'completada') && !r.kwhReal);
+  function renderBookingLink() {
+    const sel = $('#calcBooking'), field = $('#calcBookingField');
+    if (!sel || !field) return;
+    const list = linkableBookings();
+    field.classList.toggle('hidden', !list.length);
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">No, es una carga suelta</option>' + list.map((r) => {
+      const fx = parseYmd(r.fecha).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+      return `<option value="${escapeHtml(r.id)}">${escapeHtml(r.driverName || 'Vecino')} · ${fx} · ~${fmtKwh(r.kwhEst)} kWh</option>`;
+    }).join('');
+    if (list.some((r) => r.id === prev)) sel.value = prev;
+  }
+  async function toggleSessionPaid(localId) {
+    const s = sessions.find((x) => x.id === localId); if (!s) return;
+    s.pagado = !s.pagado; persistSessions(); renderHistory();
+    toast(s.pagado ? 'Pago registrado 💵' : 'Pago marcado como pendiente');
+    if (s.remoteId && VB && user) {
+      try { await VB.updateChargeSession(s.remoteId, { pagado: !!s.pagado }); }
+      catch (e) { toast('Se guardó en el dispositivo, pero no en la nube', 'error'); }
+    }
+  }
   const computeStats = () => sessions.reduce((a, s) => { a.earn += s.total || 0; a.kwh += s.kwh || 0; a.count++; return a; }, { earn: 0, kwh: 0, count: 0 });
   function taLabel(s) { const p = []; if (s.torre) p.push('T' + s.torre); if (s.apto) p.push(String(s.apto)); return p.join(' · '); }
   function renderHistory() {
     const st = computeStats(); $('#statEarn').textContent = fmtCOP(st.earn); $('#statKwh').innerHTML = fmtKwh(st.kwh) + ' <small>kWh</small>'; $('#statCount').textContent = st.count;
-    const list = $('#histList'), empty = $('#histEmpty'); list.innerHTML = '';
+    renderBookingLink();
+    const list = $('#histList'), empty = $('#histEmpty'), pend = $('#histPending'); list.innerHTML = '';
+    const porCobrar = sessions.filter((s) => !s.pagado).reduce((a, s) => a + (s.total || 0), 0);
+    if (pend) {
+      pend.classList.toggle('hidden', porCobrar <= 0);
+      if (porCobrar > 0) pend.innerHTML = '💵 Por cobrar: <b>' + fmtCOP(porCobrar) + '</b> · marca el pago cuando te llegue la transferencia.';
+    }
     if (!sessions.length) { empty.classList.remove('hidden'); return; } empty.classList.add('hidden');
     sessions.forEach((s) => {
       const li = document.createElement('li'); li.className = 'hist-item'; const d = new Date(s.dateISO);
-      const sub = [d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }), d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }), taLabel(s) || (s.driverName ? s.carModel : '')].filter(Boolean).join(' · ');
-      li.innerHTML = `<div class="hist-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div><div class="hist-main"><div class="hist-title">${escapeHtml(s.driverName || s.carModel || 'Carga')}</div><div class="hist-sub">${escapeHtml(sub)}</div></div><div class="hist-amount"><div class="hist-cop">${fmtCOP(s.total)}</div><div class="hist-kwh">${fmtKwh(s.kwh)} kWh</div></div><div class="hist-actions"><button class="btn-ghost btn-sm" data-share="${s.id}">Compartir</button><button class="btn-ghost btn-sm btn-danger" data-del="${s.id}">Eliminar</button></div>`;
+      const sub = [d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }), d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }), taLabel(s) || (s.driverName ? s.carModel : ''), s.remoteId ? '☁️' : ''].filter(Boolean).join(' · ');
+      li.innerHTML = `<div class="hist-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div><div class="hist-main"><div class="hist-title">${escapeHtml(s.driverName || s.carModel || 'Carga')}${s.pagado ? ' <span class="sc-badge b-ok">💵 Pagada</span>' : ''}</div><div class="hist-sub">${escapeHtml(sub)}</div></div><div class="hist-amount"><div class="hist-cop">${fmtCOP(s.total)}</div><div class="hist-kwh">${fmtKwh(s.kwh)} kWh</div></div><div class="hist-actions"><button class="btn-ghost btn-sm" data-pay="${s.id}">${s.pagado ? 'Sin pagar' : '💵 Pago recibido'}</button><button class="btn-ghost btn-sm" data-share="${s.id}">Compartir</button><button class="btn-ghost btn-sm btn-danger" data-del="${s.id}">Eliminar</button></div>`;
       list.appendChild(li);
     });
-    $$('#histList [data-del]').forEach((b) => b.addEventListener('click', () => { sessions = sessions.filter((x) => x.id !== b.dataset.del); persistSessions(); renderHistory(); renderCharts(); toast('Carga eliminada'); }));
+    $$('#histList [data-del]').forEach((b) => b.addEventListener('click', () => deleteSession(b.dataset.del)));
     $$('#histList [data-share]').forEach((b) => b.addEventListener('click', () => { const s = sessions.find((x) => x.id === b.dataset.share); if (s) shareReceipt(s); }));
+    $$('#histList [data-pay]').forEach((b) => b.addEventListener('click', () => toggleSessionPaid(b.dataset.pay)));
+  }
+  function deleteSession(localId) {
+    const s = sessions.find((x) => x.id === localId);
+    sessions = sessions.filter((x) => x.id !== localId); persistSessions(); renderHistory(); renderCharts();
+    if (s && s.remoteId && VB && user) VB.deleteChargeSession(s.remoteId).catch(() => {});
+    toast('Carga eliminada');
   }
   function receiptText(c) {
     const L = ['⚡ *Voltio* — Recibo de carga'];
@@ -857,8 +1589,8 @@
   function download(name, content, type) { const b = new Blob([content], { type }), u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 200); }
   function exportCSV() {
     if (!sessions.length) { toast('No hay cargas para exportar', 'error'); return; }
-    const head = ['Fecha', 'Vecino', 'Vehiculo', 'Torre', 'Apto', 'Consumo (kWh)', 'Precio kWh', 'Total (COP)'];
-    const rows = sessions.map((s) => [new Date(s.dateISO).toLocaleString('es-CO'), s.driverName || '', s.carModel || '', s.torre || '', s.apto || '', round2(s.kwh), Math.round(s.pricePerKwh), Math.round(s.total)]);
+    const head = ['Fecha', 'Vecino', 'Vehiculo', 'Torre', 'Apto', 'Consumo (kWh)', 'Precio kWh', 'Total (COP)', 'Pago'];
+    const rows = sessions.map((s) => [new Date(s.dateISO).toLocaleString('es-CO'), s.driverName || '', s.carModel || '', s.torre || '', s.apto || '', round2(s.kwh), Math.round(s.pricePerKwh), Math.round(s.total), s.pagado ? 'Pagado' : 'Pendiente']);
     download('voltio-recibos.csv', '﻿' + [head].concat(rows).map((r) => r.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8'); toast('Recibos exportados ⬇');
   }
   // ---- Gráficas ----
@@ -954,7 +1686,29 @@
   function doCalc() {
     const err = $('#calcError'), inp = readInputs(), msg = validate(inp);
     if (msg) { err.textContent = msg; err.classList.remove('hidden'); if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20]); } catch (e) {} } return; }
-    err.classList.add('hidden'); const calc = computeCharge(); calc.dateISO = new Date().toISOString(); saveSession(calc); openOverlay(); playSequence(calc);
+    err.classList.add('hidden');
+    const calc = computeCharge();
+    calc.dateISO = new Date().toISOString();
+    // De qué puesto salió la carga: así el reporte del conjunto sabe a qué torre atribuirla
+    if (myStationDoc) { calc.stationId = myStationDoc.id; calc.stationName = myStationDoc.nombre || ''; calc.torrePuesto = myStationDoc.torre || ''; }
+    const sel = $('#calcBooking');
+    const bkId = (sel && !$('#calcBookingField').classList.contains('hidden')) ? sel.value : '';
+    if (bkId) {
+      calc.bookingId = bkId;
+      const rq = myRequests.find((r) => r.id === bkId);
+      if (rq) {
+        if (!calc.driverName) calc.driverName = rq.driverName || '';
+        if (!calc.stationName) calc.stationName = rq.stationName || '';
+        if (!calc.torrePuesto) calc.torrePuesto = rq.torre || '';
+      }
+    }
+    const s = saveSession(calc);
+    if (VB && user) {
+      pushSession(s).catch(() => { syncDone = false; toast('La carga quedó guardada aquí; la subimos al conjunto más tarde', 'error'); });
+    }
+    if (sel) sel.value = '';
+    renderHistory(); renderCharts(); // el historial y las gráficas quedan al día detrás del overlay
+    openOverlay(); playSequence(calc);
   }
   function resetForm() { ['#readingStart', '#readingEnd', '#directKwh', '#driverName', '#carModel', '#discount'].forEach((s) => { $(s).value = ''; }); $('#serviceFee').value = settings.serviceFee > 0 ? settings.serviceFee : ''; taState.torre = null; taState.piso = null; taState.unit = null; renderTA(); updateLive(); }
 
@@ -962,10 +1716,15 @@
     registerSW(); setupInstall(); buildTAChips(); renderTA(); buildAvDias(); loadSettingsUI();
     stations = DEMO_STATIONS.slice(); // arranque inmediato; se reemplaza con datos en vivo
     setBattery(100);
+    document.addEventListener('pointerdown', addRipple, { passive: true });
 
     whenVB((vb) => {
       VB = vb;
-      VB.onAuth((u) => { user = u; renderAuthUI(); startWatchers(); if (u) closeSheet('#loginSheet'); refreshAll(); });
+      VB.onAuth((u) => {
+        const wasAdmin = isAdmin(); user = u; renderAuthUI(); startWatchers();
+        if (u) { closeSheet('#loginSheet'); syncPendingSessions(); } else { syncDone = false; }
+        refreshAll(); if (!u && wasAdmin) refreshMode();
+      });
       unsubs.st = VB.watchStations((list) => {
         const res = list.filter((s) => (s.conjunto || 'montreal') === CONJUNTO);
         stations = res.length ? res : DEMO_STATIONS.slice();
@@ -974,9 +1733,8 @@
       }, (e) => { backendOff = true; useFallback(); if (String(e && e.code).includes('permission')) showNotice('Faltan publicar las reglas de seguridad de Firestore (te muestro los puestos de ejemplo mientras tanto).'); });
     });
 
-    // Rol
-    if (settings.role === 'driver' || settings.role === 'host') applyRole(settings.role, { keepView: true });
-    else { $('#roleGate').classList.remove('hidden'); $('#roleGate').setAttribute('aria-hidden', 'false'); $$('.nav-btn').forEach((b) => b.classList.toggle('nav-hidden', !TABS.host.includes(b.dataset.view))); }
+    // Rol / modo (el admin se resuelve cuando llega su perfil de Firestore)
+    refreshMode({ keepView: true });
     $('#roleDriverBtn').addEventListener('click', () => { applyRole('driver'); toast('Modo conductor 🚗'); });
     $('#roleHostBtn').addEventListener('click', () => { applyRole('host'); toast('Modo anfitrión 🏠'); });
     $$('#roleSwitch .seg-btn').forEach((b) => b.addEventListener('click', () => { if (settings.role !== b.dataset.role) { applyRole(b.dataset.role, { keepView: true }); } }));
@@ -1018,8 +1776,40 @@
     $$('.cal-arrow').forEach((b) => b.addEventListener('click', () => { calOffset[b.dataset.cal] += +b.dataset.dir; if (b.dataset.cal === 'driver') renderCalendar('#calDriver', myBookings, 'driver'); else renderCalendar('#calHost', myRequests, 'host'); }));
 
     // Novedades
-    $('#notifEnable').addEventListener('click', async () => { try { const p = await Notification.requestPermission(); if (p === 'granted') { toast('Notificaciones activadas 🔔'); notify('Voltio MontReal', 'Te avisaremos de solicitudes y mensajes.'); } refreshNotifBanner(); } catch (e) {} });
+    $('#notifEnable').addEventListener('click', requestNotifPermission);
+    $('#notifEnable2').addEventListener('click', requestNotifPermission);
     $('#novChatsAll').addEventListener('click', () => goView('chats'));
+
+    // Administración
+    $('#admAddSpot').addEventListener('click', () => openAdminSpot(null));
+    $('#admRepMonth').addEventListener('change', () => { repState.month = $('#admRepMonth').value; renderReporte(); });
+    $('#admRepPdf').addEventListener('click', () => downloadReporte('pdf'));
+    $('#admRepCsv').addEventListener('click', () => downloadReporte('csv'));
+    $$('#admChartGroup .seg-btn').forEach((b) => b.addEventListener('click', () => { admChart.metric = b.dataset.agroup; $$('#admChartGroup .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b)); renderAdminChart(); }));
+    $('#admUserSearch').addEventListener('input', drawUsers);
+    $('#goPanelBtn').addEventListener('click', () => { adminAsGuest = false; localStorage.setItem(LS_ADMINGUEST, 'false'); loadAdminSettingsUI(); refreshMode(); });
+    $('#adminAsGuest').addEventListener('click', () => {
+      adminAsGuest = !adminAsGuest; localStorage.setItem(LS_ADMINGUEST, JSON.stringify(adminAsGuest));
+      loadAdminSettingsUI(); renderAuthUI();
+      if (adminAsGuest && !(settings.role === 'driver' || settings.role === 'host')) { settings.role = 'host'; persistSettings(); }
+      refreshMode();
+    });
+
+    // Perfil del residente
+    $('#pfSave').addEventListener('click', saveProfileHandler);
+
+    // QR de pago (formulario del anfitrión)
+    $('#spQrPick').addEventListener('click', () => $('#spQrInput').click());
+    $('#spQrInput').addEventListener('change', async () => { const f = $('#spQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), url); toast('QR cargado 📷'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#spQrInput').value = ''; });
+    $('#spQrRemove').addEventListener('click', () => { spotQr = ''; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), null); });
+
+    // Fotos del puesto
+    $('#spFotoPick').addEventListener('click', () => $('#spFotoInput').click());
+    $('#spFotoInput').addEventListener('change', async () => {
+      const f = $('#spFotoInput').files; if (f && f.length) await addSpotFotos(f);
+      $('#spFotoInput').value = '';
+    });
+    renderSpotFotos();
 
     // Disponibilidad
     $('#avSave').addEventListener('click', saveAvailability);
@@ -1047,7 +1837,15 @@
     $('#shareBtn').addEventListener('click', () => { if (lastCalc) shareReceipt(lastCalc); });
     $('#newBtn').addEventListener('click', () => playExit(() => { closeOverlay(); resetForm(); }));
     $('#exportBtn').addEventListener('click', exportCSV); $('#exportBtn2').addEventListener('click', exportCSV);
-    $('#clearHistBtn').addEventListener('click', () => { if (!sessions.length) { toast('El historial ya está vacío'); return; } if (confirm('¿Borrar todo el historial de cargas?')) { sessions = []; persistSessions(); renderHistory(); renderCharts(); toast('Historial borrado'); } });
+    $('#clearHistBtn').addEventListener('click', () => {
+      if (!sessions.length) { toast('El historial ya está vacío'); return; }
+      const enNube = sessions.filter((s) => s.remoteId).length;
+      if (!confirm('¿Borrar todo el historial de cargas?' + (enNube ? '\n\nTambién se quitarán ' + enNube + (enNube === 1 ? ' carga' : ' cargas') + ' del reporte del conjunto.' : ''))) return;
+      const remotos = sessions.filter((s) => s.remoteId).map((s) => s.remoteId);
+      sessions = []; persistSessions(); renderHistory(); renderCharts();
+      if (VB && user) remotos.forEach((id) => VB.deleteChargeSession(id).catch(() => {}));
+      toast('Historial borrado');
+    });
     $$('#chartGroup .seg-btn').forEach((b) => b.addEventListener('click', () => { chartState.group = b.dataset.group; $$('#chartGroup .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b)); renderCharts(); }));
 
     // Ajustes

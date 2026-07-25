@@ -3,34 +3,78 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+
+    // Un administrador del conjunto: users/{uid}.role == 'admin'
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Terceros solo pueden tocar los agregados de calificación de una estación.
     function onlyRating() {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['ratingSum', 'ratingCount']);
     }
 
-    // Perfiles de usuario
-    match /users/{uid} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() &&
-        (request.auth.uid == uid || onlyRating());
+    // El campo 'role' no puede aparecer ni cambiar en una auto-edición de perfil.
+    function roleUnchanged() {
+      return !('role' in request.resource.data)
+        || (('role' in resource.data) && request.resource.data.role == resource.data.role);
     }
 
-    // Estaciones de carga: lectura pública (mapa), escritura del dueño.
-    // Terceros solo pueden tocar los agregados de calificación.
+    // Confirmar el pago y registrar la carga real es potestad del anfitrión,
+    // nunca del vecino que reserva.
+    function pagoUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['pagado', 'pagadoAt', 'pagadoPor', 'kwhReal', 'totalReal', 'sessionId']);
+    }
+
+    // Perfiles de usuario / residentes
+    match /users/{uid} {
+      // Lectura puntual para autenticados (nombres en chats, etc.).
+      allow get: if signedIn();
+      // Listar toda la colección: solo el admin (protege celular/torre/apto).
+      allow list: if isAdmin();
+
+      // Al crear, nadie puede autoasignarse un rol distinto de 'guest'.
+      allow create: if signedIn() && request.auth.uid == uid
+        && (!('role' in request.resource.data) || request.resource.data.role == 'guest');
+
+      // Cada quien edita su perfil sin tocar 'role'; el admin puede todo.
+      allow update: if (signedIn() && request.auth.uid == uid && roleUnchanged())
+        || isAdmin();
+    }
+
+    // Estaciones / puestos de carga: lectura pública, escritura del dueño o admin.
     match /stations/{id} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if signedIn() &&
-        (resource.data.ownerUid == request.auth.uid || onlyRating());
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow update: if (signedIn() && (resource.data.ownerUid == request.auth.uid || onlyRating()))
+        || isAdmin();
+      allow delete: if (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || isAdmin();
     }
 
-    // Reservas: las ven y actualizan solo conductor y anfitrión involucrados
+    // Reservas: conductor y anfitrión involucrados, y el admin del conjunto.
     match /bookings/{id} {
       allow create: if signedIn() && request.resource.data.driverUid == request.auth.uid;
-      allow read, update: if signedIn() &&
-        (resource.data.driverUid == request.auth.uid ||
-         resource.data.ownerUid == request.auth.uid);
+      allow read: if (signedIn() &&
+          (resource.data.driverUid == request.auth.uid ||
+           resource.data.ownerUid == request.auth.uid))
+        || isAdmin();
+      // El anfitrión (y el admin) pueden todo; el vecino, todo menos el pago.
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || (signedIn() && resource.data.driverUid == request.auth.uid && pagoUnchanged());
+    }
+
+    // Cargas medidas con la calculadora del anfitrión (historial real del conjunto).
+    // Solo las ve quien las registró y la administración.
+    match /sessions/{id} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read, update, delete: if isAdmin()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
     // Chats: solo participantes

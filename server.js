@@ -29,6 +29,8 @@ const MIME = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+  '.pdf': 'application/pdf',
   '.map': 'application/json; charset=utf-8'
 };
 
