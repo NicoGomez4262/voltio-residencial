@@ -179,6 +179,22 @@ async function seed() {
   console.log('SEED COMPLETO');
 }
 
+/* Retira los puestos de ejemplo: en el piloto real el conjunto no debe ver
+   cargadores que no existen (ni torres que no existen).
+   Se puede deshacer en cualquier momento con `node scripts/backend-setup.js seed`. */
+async function unseed() {
+  for (const s of SEED) {
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default/documents/stations/${s.id}`;
+    const g = await api('GET', url);
+    if (g.status !== 200) { console.log('unseed', s.id, '-> no existe'); continue; }
+    const esDemo = g.body.fields && g.body.fields.demo && g.body.fields.demo.booleanValue === true;
+    if (!esDemo) { console.log('unseed', s.id, '-> OMITIDO: ya no está marcado como demo (¿lo edito alguien?)'); continue; }
+    const r = await api('DELETE', url);
+    console.log('unseed', s.id, '->', r.status === 200 ? 'borrado' : r.status);
+  }
+  console.log('LISTO: el conjunto ya solo verá puestos reales.');
+}
+
 /* ============================ CHECK ============================ */
 async function check() {
   const db = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default`);
@@ -266,6 +282,7 @@ async function iam() {
   const cmd = process.argv[2] || 'setup';
   if (cmd === 'setup') await setup();
   else if (cmd === 'seed') await seed();
+  else if (cmd === 'unseed') await unseed();
   else if (cmd === 'google') await tryGoogle();
   else if (cmd === 'check') await check();
   else if (cmd === 'iam') await iam();

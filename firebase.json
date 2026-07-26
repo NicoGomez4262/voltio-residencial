@@ -1,6 +1,11 @@
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "database": "default"
+  },
+  "functions": {
+    "source": "functions",
+    "ignore": ["node_modules", ".git", "*.log"]
   },
   "hosting": [
     {

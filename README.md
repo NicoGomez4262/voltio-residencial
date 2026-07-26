@@ -159,6 +159,47 @@ v2.4 agrega:
 > `node scripts/backend-setup.js rules` — la base de este proyecto se llama `default`,
 > así que el release es `cloud.firestore/default`.
 
+## 🚀 v2.5 — Lista para el piloto real
+
+- **💳 Pago en línea con Wompi (tarjeta, PSE, Nequi)** — opcional y por anfitrión.
+  Cada quien decide: solo Bre-B, solo en línea, o los dos; al vecino le aparecen
+  únicamente los métodos que su anfitrión configuró.
+  La **conciliación es automática**: al volver del banco se consulta la transacción
+  contra la API de Wompi y, cuando el anfitrión abre la app, se vuelve a verificar
+  desde su sesión antes de dar la reserva por pagada.
+  Con una llave `pub_test_` los pagos son simulados: se puede ensayar todo el flujo
+  sin mover un peso.
+- **📷 Lectura del contador por foto (OCR)** — botón de cámara en la calculadora.
+  Encuadras los números, la app los lee en el dispositivo (la foto no se sube) y
+  propone la lectura para que la confirmes. El motor se descarga solo la primera vez.
+- **🚙 Tu carro en la pantalla de inicio** — el vehículo y el color elegidos aparecen
+  animados al entrar, y **quedan guardados en la cuenta**: al entrar desde otro
+  celular siguen ahí.
+- **🏢 El conjunto real** — 3 torres × 8 pisos × 4 apartamentos (101 → 804), con
+  selectores en lugar de campos libres.
+- **✦ Panel de administración depurado** — el administrador ya no ve ajustes de
+  residente (su información en el conjunto, notificaciones, precio de la energía,
+  estimaciones y recibo) ni el selector de vehículo: solo los colores.
+- **🔔 Push con la app cerrada** — cliente y Cloud Functions listos en
+  [`functions/`](functions/index.js); se activan al pasar el proyecto a Blaze
+  (ver abajo).
+- Sin puestos de ejemplo en producción: en el conjunto solo se ven cargadores reales.
+
+### Notificaciones con la app cerrada
+
+Queda todo escrito; falta un paso que es tuyo porque implica facturación:
+
+1. Activa el **plan Blaze** en el proyecto `voltio-aec23` (tiene capa gratuita amplia:
+   el piloto no debería costar nada).
+2. Firebase → Configuración del proyecto → **Cloud Messaging** → *Web Push
+   certificates* → **Generate key pair**.
+3. Pega esa clave en `vapidKey` dentro de
+   [`public/js/firebase-config.js`](public/js/firebase-config.js).
+4. `cd functions && npm install && firebase deploy --only functions`
+
+Mientras `vapidKey` esté vacía la app no intenta nada: los avisos siguen llegando
+con la app abierta, como hasta ahora.
+
 ## 🗺️ Roadmap
 
 - [x] **Backend real**: Firebase Auth (Google/correo) + Firestore en tiempo real.
@@ -169,11 +210,12 @@ v2.4 agrega:
 - [x] Reporte mensual (PDF/CSV) por torre para la administración.
 - [x] Historial real del conjunto: cargas de la calculadora en Firestore.
 - [x] Confirmación de pago recibido por el anfitrión.
-- [ ] **Notificaciones push con la app cerrada** (FCM + Cloud Function; requiere plan Blaze).
-- [ ] Pagos integrados PSE/pasarela con conciliación automática.
+- [x] **Pagos integrados (Wompi) con conciliación automática.**
+- [x] **Lectura del contador por foto (OCR).**
+- [x] Preferencias del residente guardadas en su cuenta.
+- [ ] **Notificaciones push con la app cerrada** (código listo; requiere plan Blaze + clave VAPID).
 - [ ] Verificación de identidad (cédula) para el badge 🪪.
 - [ ] Check-in con QR al llegar al puesto.
-- [ ] Lectura del contador por foto (OCR).
 
 ## 🤝 Contribuir
 

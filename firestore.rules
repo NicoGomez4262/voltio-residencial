@@ -25,9 +25,13 @@ service cloud.firestore {
 
     // Confirmar el pago y registrar la carga real es potestad del anfitrión,
     // nunca del vecino que reserva.
+    // Confirmar el pago y registrar la carga real es potestad del anfitrión,
+    // nunca del vecino que reserva. El vecino sí puede dejar constancia de su
+    // pago en línea (wompiTxId y compañía): esos datos se verifican después
+    // contra Wompi desde la sesión del anfitrión, así que declararlos no basta.
     function pagoUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['pagado', 'pagadoAt', 'pagadoPor', 'kwhReal', 'totalReal', 'sessionId']);
+        .hasAny(['pagado', 'pagadoAt', 'pagadoPor', 'pagoMetodo', 'kwhReal', 'totalReal', 'sessionId']);
     }
 
     // Perfiles de usuario / residentes
@@ -54,6 +58,15 @@ service cloud.firestore {
         || isAdmin();
       allow delete: if (signedIn() && resource.data.ownerUid == request.auth.uid)
         || isAdmin();
+
+      // Llaves de la pasarela de pago (Wompi) del anfitrión.
+      // Fuera del documento del puesto, que es de lectura pública: aquí solo
+      // entra quien tiene sesión, porque su celular necesita firmar el cobro.
+      match /pay/{doc} {
+        allow read: if signedIn();
+        allow write: if isAdmin()
+          || (signedIn() && get(/databases/$(database)/documents/stations/$(id)).data.ownerUid == request.auth.uid);
+      }
     }
 
     // Reservas: conductor y anfitrión involucrados, y el admin del conjunto.

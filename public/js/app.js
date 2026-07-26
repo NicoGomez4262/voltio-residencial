@@ -14,6 +14,9 @@
   const LS_SEEN = 'voltio.res.seen.v1';
   const LS_ADMINGUEST = 'voltio.res.adminAsGuest.v1';
   const CONJUNTO = 'montreal';
+  // MontReal: 3 torres, 8 pisos por torre, 4 apartamentos por piso (101 → 804).
+  const TORRES = 3, PISOS = 8, APTOS_POR_PISO = 4;
+  const APTO_MIN = 101, APTO_MAX = PISOS * 100 + APTOS_POR_PISO;
   const CO2_GAS_PER_L = 2.31, GAS_KM_PER_L = 12, GAS_PRICE_PER_L = 4300;
   const DIAS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
   const DIAS_FULL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -21,6 +24,8 @@
   const DEFAULTS = { pricePerKwh: 800, serviceFee: 0, stationName: '', ownerName: '', kmPerKwh: 6, accent: 'cyan', animations: true, role: null, vehicle: 'pickup' };
 
   // Respaldo local: si Firestore aún no responde, la búsqueda no queda vacía
+  // En producción el conjunto ve solo puestos reales; los de ejemplo son para desarrollar.
+  const DEMO_ON = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
   const DEMO_STATIONS = [
     { id: 'mr-t1-ana', demo: true, ownerUid: 'voltio-demo', ownerName: 'Ana G. (Torre 1)', nombre: 'Torre 1 · Parqueadero cubierto', torre: '1', numeroParqueadero: 'P-112', puerto: 'Tipo 2', pow: 7.4, tamano: 'Mediano', precio: 900, serviceFee: 0, discount: 0, dias: [0,1,1,1,1,1,0], desde: '06:00', hasta: '22:00', breb: '@ana.montreal', titular: 'Ana Gómez', visible: true, condiciones: 'Cubierto y con cámaras. Escríbeme por el chat al llegar.', ratingSum: 47, ratingCount: 10 },
     { id: 'mr-t3-carlos', demo: true, ownerUid: 'voltio-demo', ownerName: 'Carlos R. (Torre 3)', nombre: 'Torre 3 · Toma nocturna', torre: '3', numeroParqueadero: 'P-305', puerto: 'Doméstico', pow: 3.6, tamano: 'Pequeño', precio: 800, serviceFee: 0, discount: 0, dias: [1,1,1,1,1,1,1], desde: '18:00', hasta: '23:00', breb: '@carlos3', titular: 'Carlos Ruiz', visible: true, condiciones: 'Toma de 220V, ideal para cargas nocturnas.', ratingSum: 22, ratingCount: 6 },
@@ -112,7 +117,43 @@
   const devAdmin = () => { try { return (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && localStorage.getItem('voltio.dev.admin') === '1'; } catch (e) { return false; } };
   const isAdmin = () => !!(myProfile && myProfile.role === 'admin') || devAdmin();
 
-  const persistSettings = () => localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+  /* ---------- Ajustes personales: locales y también en la cuenta ----------
+     Lo que el vecino escoge (su carro, su color, su tarifa) deja de vivir solo
+     en este dispositivo: se guarda en su perfil y lo acompaña a donde entre. */
+  const PREF_KEYS = ['accent', 'vehicle', 'animations', 'pricePerKwh', 'kmPerKwh', 'serviceFee', 'stationName', 'ownerName', 'role'];
+  let prefsLoaded = false;    // ya trajimos (o sembramos) las preferencias de la nube
+  let applyingPrefs = false;  // evita devolver a la nube lo que acabamos de bajar
+  let prefsTimer = null;
+
+  const persistSettings = () => { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); queuePrefsSync(); };
+  function queuePrefsSync() {
+    if (applyingPrefs || !VB || !user) return;
+    clearTimeout(prefsTimer);
+    prefsTimer = setTimeout(() => {
+      const p = {};
+      PREF_KEYS.forEach((k) => { if (settings[k] !== undefined) p[k] = settings[k]; });
+      VB.savePrefs(p).catch(() => {});
+    }, 900);
+  }
+  function applyPrefs(p) {
+    applyingPrefs = true;
+    try {
+      const rolAntes = settings.role;
+      PREF_KEYS.forEach((k) => { if (p[k] !== undefined && p[k] !== null) settings[k] = p[k]; });
+      localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+      loadSettingsUI();
+      if (settings.role !== rolAntes) refreshMode({ keepView: true });
+      syncHeroCar();
+    } finally { applyingPrefs = false; }
+  }
+  // Primer perfil tras entrar: o adoptamos lo que ya tenía la cuenta, o le
+  // subimos lo que traía este dispositivo.
+  function syncPrefsOnLogin() {
+    if (prefsLoaded || !myProfile) return;
+    prefsLoaded = true;
+    if (myProfile.prefs && Object.keys(myProfile.prefs).length) applyPrefs(myProfile.prefs);
+    else queuePrefsSync();
+  }
   const persistSessions = () => localStorage.setItem(LS_SESSIONS, JSON.stringify(sessions));
   const persistSeen = () => localStorage.setItem(LS_SEEN, JSON.stringify(seen));
 
@@ -123,8 +164,8 @@
   }
   function useFallback() {
     if (stations.length) return;
-    stations = DEMO_STATIONS.slice();
-    showNotice('Mostrando puestos de ejemplo. La conexión con la nube de Voltio está pendiente.');
+    if (DEMO_ON) { stations = DEMO_STATIONS.slice(); showNotice('Mostrando puestos de ejemplo. La conexión con la nube de Voltio está pendiente.'); }
+    else showNotice('No pudimos conectar con la nube de Voltio. Revisa tu internet: en cuanto vuelva, los puestos aparecen solos.');
     if (currentView === 'buscar') runSearch();
   }
   function showNotice(msg) {
@@ -155,6 +196,7 @@
     $('#roleGate').classList.add('hidden'); $('#roleGate').setAttribute('aria-hidden', 'true');
     if (!opts || !opts.keepView) goView(list[0]);
     else if (!list.includes(currentView)) goView(list[0]);
+    else syncHeroCar();
   }
   // Decide y aplica el modo según admin/rol; muestra el selector si aún no hay rol.
   function refreshMode(opts) {
@@ -177,6 +219,7 @@
     if (name === 'panel') renderPanel();
     if (name === 'usuarios') renderUsers();
     if (name === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); updateNotifState(); }
+    syncHeroCar();
     updateDots();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -205,13 +248,29 @@
     $('#resContent').classList.toggle('hidden', !logged);
     $('#novContent').classList.toggle('hidden', !logged);
     $('#puestoForm').classList.toggle('hidden', !logged || (myStationDoc && !window.__spotEditing));
-    $('#profileCard').classList.toggle('hidden', !logged);
     $('#adminCard').classList.toggle('hidden', !isAdmin());
-    $('#roleCard').classList.toggle('hidden', isAdmin() && !adminAsGuest);
+    applyAdminSettingsView(logged);
+  }
+  /* El administrador no vive en la app como vecino: no tiene puesto, no cobra
+     energía y no arma recibos. Le dejamos solo lo suyo. */
+  function applyAdminSettingsView(logged) {
+    const soloAdmin = effectiveMode() === 'admin';
+    $('#roleCard').classList.toggle('hidden', soloAdmin);
+    $('#profileCard').classList.toggle('hidden', soloAdmin || !logged);
+    ['#notifCard', '#priceCard', '#receiptCard'].forEach((s) => { const el = $(s); if (el) el.classList.toggle('hidden', soloAdmin); });
+    const veh = $('#vehBlock'); if (veh) veh.classList.toggle('hidden', soloAdmin);
+    const note = $('#prefsSyncNote');
+    if (note) {
+      note.textContent = soloAdmin
+        ? 'El color acompaña tu cuenta de administración en cualquier dispositivo.'
+        : (logged ? 'Tu vehículo y tus colores quedan guardados en tu cuenta: los verás igual en cualquier celular.'
+                  : 'Inicia sesión para que tu vehículo y tus colores te sigan a cualquier dispositivo.');
+    }
+    syncHeroCar();
   }
   function startWatchers() {
     stopWatchers(['bk', 'rq', 'ch', 'prof', 'allbk', 'allst', 'allses']);
-    if (!VB || !user) { myBookings = []; myRequests = []; myChats = []; myProfile = null; allBookings = []; allStations = []; allUsers = []; allSessions = []; refreshAll(); return; }
+    if (!VB || !user) { myBookings = []; myRequests = []; myChats = []; myProfile = null; allBookings = []; allStations = []; allUsers = []; allSessions = []; prefsLoaded = false; refreshAll(); return; }
     unsubs.prof = VB.watchMyProfile((p) => { const was = isAdmin(); myProfile = p; onProfileUpdate(was); });
     unsubs.bk = VB.watchMyBookings((l) => { myBookings = l; onBookingsUpdate(); });
     unsubs.rq = VB.watchRequests((l) => { const prev = myRequests; myRequests = l; onRequestsUpdate(prev); });
@@ -226,6 +285,7 @@
   }
   function onProfileUpdate(wasAdmin) {
     const nowAdmin = isAdmin();
+    syncPrefsOnLogin();
     if (currentView === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); }
     if (nowAdmin && !wasAdmin) { startAdminWatchers(); refreshMode({ keepView: true }); }
     else if (!nowAdmin && wasAdmin) { stopWatchers(['allbk', 'allst', 'allses']); allBookings = []; allStations = []; allSessions = []; refreshMode({ keepView: true }); }
@@ -303,18 +363,31 @@
   function requestNotifPermission() {
     if (!('Notification' in window)) { toast('Tu navegador no soporta notificaciones', 'error'); return Promise.resolve('unsupported'); }
     return Notification.requestPermission().then((p) => {
-      if (p === 'granted') { toast('Notificaciones activadas 🔔'); notify('Voltio MontReal', 'Te avisaremos de reservas, confirmaciones y mensajes.'); }
+      if (p === 'granted') { toast('Notificaciones activadas 🔔'); notify('Voltio MontReal', 'Te avisaremos de reservas, confirmaciones y mensajes.'); setupPush(); }
       else if (p === 'denied') toast('Notificaciones bloqueadas en el navegador', 'error');
       refreshNotifBanner(); updateNotifState();
       return p;
     }).catch(() => 'error');
+  }
+  /* Registra el dispositivo para recibir avisos con la app cerrada.
+     Sin clave VAPID en firebase-config.js esto no hace nada y los avisos
+     siguen llegando solo con la app abierta. */
+  let pushToken = null;
+  function setupPush() {
+    if (!VB || !user || pushToken) return;
+    if (!VB.pushAvailable || !VB.pushAvailable()) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    VB.registerPush().then((t) => { if (t) { pushToken = t; updateNotifState(); } }).catch(() => {});
   }
   function updateNotifState() {
     const el = $('#notifState'); if (!el) return;
     const sup = 'Notification' in window;
     const st = sup ? Notification.permission : 'unsupported';
     const map = { granted: '✅ Activadas', denied: '🚫 Bloqueadas (actívalas en los ajustes del navegador)', default: 'Aún no activadas', unsupported: 'No disponibles en este navegador' };
-    el.textContent = map[st] || '';
+    const cerrada = (VB && VB.pushAvailable && VB.pushAvailable())
+      ? (pushToken ? ' · también con la app cerrada 📲' : '')
+      : ' · solo con la app abierta';
+    el.textContent = (map[st] || '') + (st === 'granted' ? cerrada : '');
     const btn = $('#notifEnable2'); if (btn) btn.classList.toggle('hidden', st === 'granted' || st === 'unsupported');
   }
   function refreshNotifBanner() {
@@ -461,6 +534,7 @@
         <div class="sh-spec"><b>~${Math.round((sp.pow || 0) * (settings.kmPerKwh || 6))}</b><small>km/hora</small></div>
       </div>
       <div class="sh-avail">🗓️ Disponible: ${availText(sp)}</div>
+      <div class="sh-pay">💳 Pagas con: ${[sp.breb ? '<b>Bre-B</b>' : '', sp.wompi ? '<b>tarjeta, PSE o Nequi</b>' : ''].filter(Boolean).join(' o ') || '<b>lo que acuerdes por el chat</b>'}</div>
       ${(sp.fotos && sp.fotos.length) ? `<div class="foto-strip">${sp.fotos.map((f, i) => `<img src="${escapeHtml(f)}" alt="Foto ${i + 1} de ${escapeHtml(sp.nombre)}" loading="lazy"/>`).join('')}</div>` : ''}
       ${sp.condiciones ? `<div class="bk-pay" style="margin:0 0 14px">📋 ${escapeHtml(sp.condiciones)}</div>` : ''}
       <h3 class="sub-h">Agenda tu carga</h3>
@@ -495,7 +569,7 @@
       $('#bkSend').disabled = true;
       const bk = {
         stationId: sp.id, stationName: sp.nombre, ownerUid: sp.ownerUid, ownerName: sp.ownerName || 'Anfitrión',
-        torre: sp.torre || '', puerto: sp.puerto || '', breb: sp.breb || '', titular: sp.titular || '', banco: sp.banco || '',
+        torre: sp.torre || '', puerto: sp.puerto || '', breb: sp.breb || '', titular: sp.titular || '', banco: sp.banco || '', wompi: !!sp.wompi,
         precio: sp.precio || 0, fecha, from, to, kwhEst, total: kwhEst * (sp.precio || 0), demo: !!sp.demo, common
       };
       if (common) { bk.estado = 'confirmada'; bk.numeroParqueadero = sp.numeroParqueadero || ''; }
@@ -519,6 +593,136 @@
   }
 
   /* =========================================================
+     Pagos en línea (Wompi)
+     El vecino paga con tarjeta, PSE o Nequi; al volver comprobamos la
+     transacción contra Wompi. La confirmación que cuenta la hace la sesión
+     del anfitrión, que es quien recibe el dinero.
+     ========================================================= */
+  const payCfgCache = {};
+  async function payConfigOf(stationId) {
+    if (!stationId || !VB) return null;
+    if (payCfgCache[stationId] !== undefined) return payCfgCache[stationId];
+    const cfg = await VB.getPayConfig(stationId).catch(() => null);
+    payCfgCache[stationId] = cfg;
+    return cfg;
+  }
+  const aceptaWompi = (bk) => { const st = findStation(bk.stationId); return !!(st ? st.wompi : bk.wompi); };
+  const brebDe = (bk) => { const st = findStation(bk.stationId); return bk.breb || (st && st.breb) || ''; };
+
+  async function payWithWompi(bookingId) {
+    const bk = myBookings.find((b) => b.id === bookingId);
+    if (!bk || !window.VW) return;
+    const btn = $('#bookList [data-wompi="' + bookingId + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Abriendo el pago…'; }
+    try {
+      const cfg = await payConfigOf(bk.stationId);
+      if (!window.VW.isConfigured(cfg)) throw new Error('El anfitrión aún no terminó de configurar el pago en línea. Usa Bre-B o escríbele por el chat.');
+      const total = bk.totalReal || bk.total;
+      const ck = await window.VW.buildCheckout({
+        bookingId, totalCOP: total, pubKey: cfg.pubKey, integrity: cfg.integrity,
+        redirectUrl: location.origin + '/?wpay=' + encodeURIComponent(bookingId),
+        email: (user && user.email) || '', fullName: (VB && VB.userName()) || ''
+      });
+      window.VW.remember({ bookingId, reference: ck.reference, amountInCents: ck.amountInCents, pubKey: cfg.pubKey, stationId: bk.stationId });
+      location.href = ck.url;
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '💳 Pagar en línea'; }
+      toast(e.message || 'No pudimos abrir el pago', 'error');
+    }
+  }
+
+  /* Volvimos del banco: Wompi nos deja el id de la transacción en la URL. */
+  async function checkWompiReturn() {
+    if (!window.VW) return;
+    const txId = window.VW.returnedTxId();
+    const pend = window.VW.pending();
+    if (!txId || !pend) return;
+    window.VW.cleanUrl();
+    toast('Comprobando tu pago con Wompi…');
+    try {
+      const tx = await window.VW.getTransaction(txId, pend.pubKey);
+      const v = window.VW.verifyAgainst(tx, pend.amountInCents);
+      const patch = {
+        wompiTxId: txId, wompiRef: tx ? tx.reference : pend.reference,
+        wompiStatus: (tx && tx.status) || 'DESCONOCIDO',
+        wompiMonto: (tx && tx.amount_in_cents) || pend.amountInCents,
+        pagoMetodo: 'wompi'
+      };
+      if (VB && user) await VB.updateBooking(pend.bookingId, patch).catch(() => {});
+      window.VW.forget();
+      const tabs = TABS[effectiveMode()] || [];
+      if (tabs.includes('reservas')) goView('reservas');
+      if (v.ok) { successPop(); toast('¡Pago aprobado! ✅ El anfitrión ya lo verá confirmado'); }
+      else toast(v.motivo || 'El pago no quedó aprobado', 'error');
+    } catch (e) {
+      toast('No pudimos confirmar el pago con Wompi. Revisa tu reserva en un momento.', 'error');
+    }
+  }
+
+  /* Del lado del anfitrión: cada pago en línea se contrasta con Wompi y, si es
+     real, la reserva queda pagada sin que él tenga que revisar nada. */
+  let verifyingWompi = false;
+  async function autoVerifyWompiPayments() {
+    if (verifyingWompi || !VB || !user || !window.VW || !myStationDoc) return;
+    const pendientes = myRequests.filter((r) => r.wompiTxId && !r.pagado && r.wompiStatus !== 'DECLINED');
+    if (!pendientes.length) return;
+    const cfg = await payConfigOf(myStationDoc.id);
+    if (!window.VW.isConfigured(cfg)) return;
+    verifyingWompi = true;
+    try {
+      for (const r of pendientes.slice(0, 8)) {
+        try {
+          const tx = await window.VW.getTransaction(r.wompiTxId, cfg.pubKey);
+          const esperado = window.VW.toCents(r.totalReal || r.total);
+          const v = window.VW.verifyAgainst(tx, esperado);
+          if (v.ok) {
+            await VB.markBookingPaid(r.id, true, 'wompi');
+            notify('Pago recibido', (r.driverName || 'Un vecino') + ' pagó ' + fmtCOP(r.totalReal || r.total) + ' en línea');
+          } else if (tx && tx.status !== r.wompiStatus) {
+            await VB.updateBooking(r.id, { wompiStatus: tx.status }).catch(() => {});
+          }
+        } catch (e) { /* seguimos con las demás */ }
+      }
+    } finally { verifyingWompi = false; }
+  }
+
+  /* ---------- Bloque de pago que ve el vecino en su reserva ---------- */
+  function payBlock(bk) {
+    if (bk.estado !== 'confirmada' && bk.estado !== 'completada') return '';
+    const puesto = `📍 Tu puesto: <span class="bk-key">${escapeHtml(bk.numeroParqueadero || 'coordinar por chat')}</span>`;
+    const total = bk.totalReal || bk.total;
+
+    if (bk.pagado) {
+      const via = bk.pagoMetodo === 'wompi' ? 'Pago en línea verificado con Wompi' : escapeHtml(bk.ownerName || 'El anfitrión') + ' confirmó que recibió tu pago';
+      return `<div class="bk-pay bk-paid">${puesto}<div class="bk-paid-line">✅ ${via} de <b>${fmtCOP(total)}</b>. ¡Todo en orden!</div></div>`;
+    }
+    if (bk.wompiTxId && bk.wompiStatus === 'APPROVED') {
+      return `<div class="bk-pay bk-paid">${puesto}<div class="bk-paid-line">✅ Wompi aprobó tu pago de <b>${fmtCOP(total)}</b>. El anfitrión lo verá confirmado en su app.</div></div>`;
+    }
+
+    const breb = brebDe(bk), wompi = aceptaWompi(bk);
+    const pendiente = bk.wompiTxId && bk.wompiStatus === 'PENDING'
+      ? '<div class="bk-note">⏳ Tu pago está en proceso en el banco. Te avisamos cuando Wompi lo apruebe.</div>' : '';
+    const rechazado = bk.wompiTxId && (bk.wompiStatus === 'DECLINED' || bk.wompiStatus === 'ERROR')
+      ? '<div class="bk-note bk-note-bad">✋ El último intento de pago no pasó. Puedes reintentar o pagar por Bre-B.</div>' : '';
+
+    const lineaBreb = breb
+      ? `<br/>Paga por <b>Bre-B</b> a <span class="bk-key">${escapeHtml(breb)}</span>${bk.banco ? ' · ' + escapeHtml(bk.banco) : ''} · ${escapeHtml(bk.titular || bk.ownerName || '')}`
+      : (wompi ? '<br/>Este puesto recibe el pago <b>en línea</b>.' : '<br/>Coordina el pago con el anfitrión por el chat.');
+
+    const acciones = [];
+    if (wompi) acciones.push(`<button class="btn-ok btn-sm" data-wompi="${bk.id}">💳 Pagar ${fmtCOP(total)} en línea</button>`);
+    if (breb) {
+      acciones.push(`<button class="btn-ghost btn-sm" data-copy="${escapeHtml(breb)}">Copiar llave</button>`);
+      acciones.push(`<button class="${wompi ? 'btn-ghost' : 'btn-ok'} btn-sm" data-qr="${bk.id}">💳 Bre-B / QR</button>`);
+    }
+    const nota = wompi && !bk.totalReal
+      ? '<div class="bk-note">El monto es el estimado de la reserva. Si prefieres pagar lo exacto, espera a que el anfitrión mida la carga.</div>' : '';
+
+    return `<div class="bk-pay">${puesto}${lineaBreb}${pendiente}${rechazado}${nota}<div class="bk-actions">${acciones.join('')}</div></div>`;
+  }
+
+  /* =========================================================
      Reservas del conductor
      ========================================================= */
   const PILL = { pendiente: ['p-pend', 'Por confirmar'], confirmada: ['p-ok', 'Confirmada'], rechazada: ['p-no', 'Declinada'], cancelada: ['p-dim', 'Cancelada'], completada: ['p-dim', 'Completada'] };
@@ -534,9 +738,7 @@
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(bk.stationName)}</div><div class="bk-sub">de ${escapeHtml(bk.ownerName || '')} · Torre ${escapeHtml(bk.torre || '—')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
         <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(bk.from)}–${escapeHtml(bk.to)}</span><span>💰 ${bk.totalReal ? fmtCOP(bk.totalReal) : fmtCOP(bk.total) + ' aprox.'}</span>${bk.kwhReal ? `<span>🔋 ${fmtKwh(bk.kwhReal)} kWh medidos</span>` : ''}</div>
-        ${(bk.estado === 'confirmada' || bk.estado === 'completada') ? `<div class="bk-pay${bk.pagado ? ' bk-paid' : ''}">📍 Tu puesto: <span class="bk-key">${escapeHtml(bk.numeroParqueadero || 'coordinar por chat')}</span>${bk.pagado
-          ? `<div class="bk-paid-line">✅ ${escapeHtml(bk.ownerName || 'El anfitrión')} confirmó que recibió tu pago de <b>${fmtCOP(bk.totalReal || bk.total)}</b>. ¡Todo en orden!</div>`
-          : `<br/>Paga por <b>Bre-B</b> a <span class="bk-key">${escapeHtml(bk.breb || '—')}</span>${bk.banco ? ' · ' + escapeHtml(bk.banco) : ''} · ${escapeHtml(bk.titular || bk.ownerName || '')}<div class="bk-actions">${bk.breb ? `<button class="btn-ghost btn-sm" data-copy="${escapeHtml(bk.breb)}">Copiar llave</button>` : ''}<button class="btn-ok btn-sm" data-qr="${bk.id}">💳 Ver pago / QR</button></div>`}</div>` : ''}
+        ${payBlock(bk)}
         ${bk.estado === 'rechazada' && bk.rejectReason ? `<div class="bk-pay p-rej">✋ Motivo: ${escapeHtml(bk.rejectReason)}</div>` : ''}
         <div class="bk-actions">
           <button class="btn-ghost btn-sm" data-chat="${bk.id}">💬 Chat</button>
@@ -550,6 +752,7 @@
     persistSeen();
     $$('#bookList [data-cancel]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.cancel, { estado: 'cancelada' }).then(() => toast('Reserva cancelada'))));
     $$('#bookList [data-copy]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Llave copiada 📋'); } catch (e) {} }));
+    $$('#bookList [data-wompi]').forEach((b) => b.addEventListener('click', () => payWithWompi(b.dataset.wompi)));
     $$('#bookList [data-qr]').forEach((b) => b.addEventListener('click', () => {
       const bk = myBookings.find((x) => x.id === b.dataset.qr); if (!bk) return;
       const st = findStation(bk.stationId);
@@ -565,6 +768,7 @@
   function renderNovedades() {
     if (!user) { renderAuthUI(); return; }
     refreshNotifBanner();
+    autoVerifyWompiPayments();
     const pend = myRequests.filter((r) => r.estado === 'pendiente');
     const porCobrar = myRequests.filter((r) => (r.estado === 'confirmada' || r.estado === 'completada') && !r.pagado);
     $('#novReqCount').textContent = pend.length ? pend.length + (pend.length === 1 ? ' nueva' : ' nuevas')
@@ -587,7 +791,7 @@
       const fx = parseYmd(rq.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(rq.driverName || 'Vecino')}</div><div class="bk-sub">quiere ${escapeHtml(rq.stationName || 'tu puesto')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
-        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(rq.from)}–${escapeHtml(rq.to)}</span><span>⚡ ${rq.kwhReal ? fmtKwh(rq.kwhReal) + ' kWh medidos' : '~' + fmtKwh(rq.kwhEst) + ' kWh'}</span><span>💰 ${fmtCOP(rq.totalReal || rq.total)}</span>${rq.pagado ? '<span class="meta-paid">💵 Pago recibido</span>' : ''}</div>
+        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(rq.from)}–${escapeHtml(rq.to)}</span><span>⚡ ${rq.kwhReal ? fmtKwh(rq.kwhReal) + ' kWh medidos' : '~' + fmtKwh(rq.kwhEst) + ' kWh'}</span><span>💰 ${fmtCOP(rq.totalReal || rq.total)}</span>${rq.pagado ? `<span class="meta-paid">${rq.pagoMetodo === 'wompi' ? '💳 Pagado en línea' : '💵 Pago recibido'}</span>` : (rq.wompiTxId ? '<span class="meta-pend">⏳ Pago en línea en proceso</span>' : '')}</div>
         <div class="bk-actions">
           <button class="btn-ghost btn-sm" data-chat="${rq.id}">💬 Chat</button>
           ${rq.estado === 'pendiente' ? `<button class="btn-ok" data-acc="${rq.id}">Aceptar</button><button class="btn-ghost btn-danger" data-rej="${rq.id}">Declinar</button>` : ''}
@@ -701,7 +905,7 @@
     if (myStationDoc) { $('#puestoState').textContent = myStationDoc.visible !== false ? '● Publicado' : '○ Oculto'; loadPuestoForm(myStationDoc); }
   }
   function loadPuestoForm(sp) {
-    $('#spName').value = sp.nombre || ''; $('#spTorre').value = sp.torre || ''; $('#spNum').value = sp.numeroParqueadero || '';
+    $('#spName').value = sp.nombre || ''; selectWithFallback('#spTorre', sp.torre || ''); $('#spNum').value = sp.numeroParqueadero || '';
     $('#spSize').value = sp.tamano || 'Mediano'; $('#spPort').value = sp.puerto || 'Tipo 2'; $('#spPow').value = String(sp.pow || 7.4);
     $('#spCond').value = sp.condiciones || ''; $('#spPrecio').value = sp.precio || ''; $('#spFee').value = sp.serviceFee || ''; $('#spDesc').value = sp.discount || '';
     $('#spBreb').value = sp.breb || ''; $('#spTitular').value = sp.titular || '';
@@ -709,13 +913,57 @@
     spotQr = null; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), sp.qr || null);
     spotFotos = (sp.fotos || []).filter((f) => typeof f === 'string' && f); renderSpotFotos();
     const sw = $('#spVisible'); sw.classList.toggle('is-on', sp.visible !== false); sw.setAttribute('aria-checked', String(sp.visible !== false));
+    setWompiSwitch(!!sp.wompi);
+    loadWompiConfig(sp.id);
+  }
+  /* ---------- Pago en línea del anfitrión ---------- */
+  function setWompiSwitch(on) {
+    const sw = $('#spWompiOn'); if (!sw) return;
+    sw.classList.toggle('is-on', !!on); sw.setAttribute('aria-checked', String(!!on));
+    $('#spWompiFields').classList.toggle('hidden', !on);
+  }
+  async function loadWompiConfig(stationId) {
+    if (!$('#spWompiKey')) return;
+    $('#spWompiKey').value = ''; $('#spWompiSecret').value = '';
+    if (!stationId || !VB) return;
+    const cfg = await payConfigOf(stationId);
+    if (!cfg) return;
+    $('#spWompiKey').value = cfg.pubKey || '';
+    $('#spWompiSecret').value = cfg.integrity || '';
+    updateWompiState();
+  }
+  function updateWompiState() {
+    const el = $('#spWompiState'); if (!el || !window.VW) return;
+    const cfg = { pubKey: $('#spWompiKey').value, integrity: $('#spWompiSecret').value };
+    if (!$('#spWompiOn').classList.contains('is-on')) { el.textContent = ''; return; }
+    if (window.VW.isConfigured(cfg)) {
+      el.className = 'hint hint-ok';
+      el.textContent = window.VW.isTest(cfg.pubKey)
+        ? '🧪 Modo de prueba: los pagos son simulados, no mueven dinero real. Perfecto para ensayar.'
+        : '✅ Listo para recibir pagos reales de tus vecinos.';
+    } else {
+      el.className = 'hint hint-warn';
+      el.textContent = '⚠️ ' + window.VW.configError(cfg);
+    }
   }
   async function savePuesto() {
     if (!user) { needLogin(); return; }
     const nombre = $('#spName').value.trim();
     if (!nombre) { toast('Ponle un nombre a tu puesto', 'error'); return; }
+    const wompiOn = $('#spWompiOn').classList.contains('is-on');
+    const wompiCfg = { pubKey: $('#spWompiKey').value.trim(), integrity: $('#spWompiSecret').value.trim() };
+    if (wompiOn && window.VW && !window.VW.isConfigured(wompiCfg)) {
+      toast(window.VW.configError(wompiCfg), 'error');
+      $('#spWompiKey').focus();
+      return;
+    }
+    if (!wompiOn && !$('#spBreb').value.trim()) {
+      toast('Deja al menos una forma de cobro: la llave Bre-B o el pago en línea', 'error');
+      return;
+    }
     const data = {
       conjunto: CONJUNTO, nombre, torre: $('#spTorre').value.trim(), numeroParqueadero: $('#spNum').value.trim(),
+      wompi: wompiOn,
       tamano: $('#spSize').value, puerto: $('#spPort').value, pow: parseFloat($('#spPow').value),
       condiciones: $('#spCond').value.trim(),
       precio: Math.max(0, Math.round(parseNum($('#spPrecio').value))) || settings.pricePerKwh,
@@ -733,6 +981,9 @@
     try {
       $('#spSave').disabled = true; $('#spSave').textContent = 'Publicando…';
       const id = await VB.publishStation(data, myStationDoc && myStationDoc.id);
+      // Las llaves de la pasarela van aparte del documento público del puesto.
+      if (wompiOn) { await VB.savePayConfig(id, wompiCfg); payCfgCache[id] = wompiCfg; }
+      else { await VB.clearPayConfig(id); payCfgCache[id] = null; }
       myStationDoc = Object.assign({ id }, myStationDoc || {}, data);
       renderPuesto();
       successPop();
@@ -1306,8 +1557,8 @@
     if (!$('#pfPhone')) return;
     const p = myProfile || {};
     $('#pfPhone').value = p.phone || '';
-    $('#pfTorre').value = (p.torre && p.torre !== '—') ? p.torre : '';
-    $('#pfApto').value = (p.apto && p.apto !== '—') ? p.apto : '';
+    selectWithFallback('#pfTorre', (p.torre && p.torre !== '—') ? p.torre : '');
+    selectWithFallback('#pfApto', (p.apto && p.apto !== '—') ? p.apto : '');
   }
   async function saveProfileHandler() {
     if (!user) { needLogin(); return; }
@@ -1368,10 +1619,42 @@
      ============================================================================ */
   function buildTAChips() {
     const T = $('#torreChips'), P = $('#pisoChips'), A = $('#aptoChips');
-    for (let t = 1; t <= 6; t++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = t; b.dataset.v = t; b.addEventListener('click', () => { taState.torre = taState.torre === t ? null : t; renderTA(); }); T.appendChild(b); }
-    for (let p = 2; p <= 8; p++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = p; b.dataset.v = p; b.addEventListener('click', () => { if (taState.piso === p) { taState.piso = null; taState.unit = null; } else taState.piso = p; renderTA(); }); P.appendChild(b); }
-    for (let u = 1; u <= 4; u++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.v = u; b.addEventListener('click', () => { taState.unit = taState.unit === u ? null : u; renderTA(); }); A.appendChild(b); }
+    for (let t = 1; t <= TORRES; t++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = t; b.dataset.v = t; b.addEventListener('click', () => { taState.torre = taState.torre === t ? null : t; renderTA(); }); T.appendChild(b); }
+    for (let p = 1; p <= PISOS; p++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = p; b.dataset.v = p; b.addEventListener('click', () => { if (taState.piso === p) { taState.piso = null; taState.unit = null; } else taState.piso = p; renderTA(); }); P.appendChild(b); }
+    for (let u = 1; u <= APTOS_POR_PISO; u++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.v = u; b.addEventListener('click', () => { taState.unit = taState.unit === u ? null : u; renderTA(); }); A.appendChild(b); }
     $('#taClear').addEventListener('click', () => { taState.torre = null; taState.piso = null; taState.unit = null; renderTA(); });
+  }
+  /* Los selectores de torre y apartamento del conjunto: nadie escribe un 905 que no existe. */
+  function fillConjuntoSelects() {
+    const torres = (sel, blank) => {
+      const el = $(sel); if (!el) return;
+      el.innerHTML = '<option value="">' + blank + '</option>' +
+        Array.from({ length: TORRES }, (_, i) => `<option value="${i + 1}">Torre ${i + 1}</option>`).join('');
+    };
+    torres('#pfTorre', 'Selecciona…');
+    torres('#spTorre', 'Selecciona…');
+    const ap = $('#pfApto');
+    if (ap) {
+      let html = '<option value="">Selecciona…</option>';
+      for (let p = 1; p <= PISOS; p++) {
+        html += `<optgroup label="Piso ${p}">`;
+        for (let u = 1; u <= APTOS_POR_PISO; u++) { const n = p * 100 + u; html += `<option value="${n}">${n}</option>`; }
+        html += '</optgroup>';
+      }
+      ap.innerHTML = html;
+    }
+  }
+  // Un valor guardado antes (o escrito a mano) puede no estar en la lista: lo agregamos
+  // para no borrarle el dato al vecino sin avisar.
+  function selectWithFallback(sel, value) {
+    const el = $(sel); if (!el) return;
+    const v = String(value == null ? '' : value).trim();
+    if (v && !Array.from(el.options).some((o) => o.value === v)) {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v + ' (fuera del conjunto)';
+      el.appendChild(opt);
+    }
+    el.value = v;
   }
   function renderTA() {
     $$('#torreChips .chip').forEach((c) => c.classList.toggle('is-active', +c.dataset.v === taState.torre));
@@ -1425,6 +1708,9 @@
   const countTo = (el, a, b, d, f) => tween(d, (e) => { el.textContent = f(a + (b - a) * e); });
   function playSequence(calc) {
     clearAnims(); resetScene();
+    // Desde ya es la carga vigente: si el vecino toca "Saltar" antes de que
+    // termine la animación, tiene que ver ESTE cobro y no el anterior.
+    lastCalc = calc;
     const scene = $('#sceneMain'), car = $('#evCar'), body = $('#carBodyGrp');
     if (prefersReduced() || !settings.animations) { car.style.transform = 'translateX(0)'; scene.classList.add('charging'); setBattery(100); $('#roKwh').textContent = fmtKwh(calc.kwh); $('#roCop').textContent = fmtCOP(calc.total); setConsole('¡Completa!', 'done'); revealResult(calc); return; }
     const ENTER = 1150, CHARGE = 2100;
@@ -1651,6 +1937,73 @@
   }
 
   /* =========================================================
+     El carro de la pantalla de inicio
+     Reusamos el vehículo de la animación de cobro: se clona una sola vez,
+     hereda el modelo y el color elegidos, y se muda a la vista de inicio
+     del rol activo. Al administrador no se le muestra.
+     ========================================================= */
+  const VEH_NOMBRE = { sedan: 'automóvil', pickup: 'pickup', suv: 'SUV', '4x4': '4x4' };
+  let heroCar = null;
+
+  function buildHeroCar() {
+    const src = $('#evCar');
+    if (!src || heroCar) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'hero-car';
+
+    const svg = svgEl('svg', { viewBox: '0 100 520 212', preserveAspectRatio: 'xMidYMid meet', class: 'hero-car-svg' });
+    svg.setAttribute('aria-hidden', 'true');
+    svg.appendChild(svgEl('ellipse', { class: 'hero-floor-glow', cx: 262, cy: 290, rx: 250, ry: 20, fill: 'url(#glowRad)' }));
+    svg.appendChild(svgEl('line', { class: 'hero-floor', x1: 22, y1: 288, x2: 502, y2: 288 }));
+
+    const car = src.cloneNode(true);
+    car.removeAttribute('id');
+    car.removeAttribute('style');
+    car.setAttribute('class', 'hero-ev');
+    // Fuera lo que solo tiene sentido mientras se cobra una carga.
+    ['#speedLines', '.car-battery', '#portBurst'].forEach((sel) => {
+      const el = car.querySelector(sel); if (el) el.remove();
+    });
+    // Los id no pueden repetirse en la página: los pasamos a clases equivalentes
+    // para que el CSS del acento los siga pintando.
+    car.querySelectorAll('[id]').forEach((el) => { el.classList.add('hc-' + el.id); el.removeAttribute('id'); });
+    svg.appendChild(car);
+
+    const cap = document.createElement('div');
+    cap.className = 'hero-car-caption';
+    cap.innerHTML = '<b id="heroCarTitle"></b><span id="heroCarSub"></span>';
+
+    wrap.appendChild(svg);
+    wrap.appendChild(cap);
+    heroCar = wrap;
+  }
+
+  function syncHeroCar() {
+    if (!heroCar) return;
+    // El carro puede estar fuera del DOM (vistas sin hero), así que su modelo se
+    // fija aquí y no en applyVehicle, que solo alcanza lo que está en la página.
+    const veh0 = settings.vehicle || 'pickup';
+    heroCar.querySelectorAll('.car-model').forEach((m) => m.classList.toggle('is-active', m.dataset.model === veh0));
+
+    const slot = effectiveMode() === 'admin' ? null
+      : currentView === 'buscar' ? $('#slotBuscar')
+      : currentView === 'novedades' ? $('#slotNov') : null;
+    if (!slot) { if (heroCar.parentNode) heroCar.remove(); return; }
+    if (heroCar.parentNode !== slot) slot.appendChild(heroCar);
+    heroCar.classList.toggle('no-anim', !settings.animations || prefersReduced());
+
+    const nombre = (user && VB && VB.userName()) ? String(VB.userName()).split(' ')[0] : '';
+    const veh = VEH_NOMBRE[settings.vehicle] || 'vehículo';
+    const t = $('#heroCarTitle'), s = $('#heroCarSub');
+    if (t) t.textContent = nombre ? '¡Hola, ' + nombre + '!' : 'Bienvenido a Voltio';
+    if (s) {
+      s.textContent = !user ? 'Entra con tu cuenta y elige tu vehículo y tu color en Ajustes.'
+        : currentView === 'novedades' ? 'Tu ' + veh + ' y tu puesto, listos en MontReal.'
+        : 'Tu ' + veh + ', lista para cargar en MontReal.';
+    }
+  }
+
+  /* =========================================================
      Ajustes
      ========================================================= */
   function applyAccent(n) { document.body.dataset.accent = n; settings.accent = n; $$('#accentRow .accent-dot').forEach((d) => d.classList.toggle('is-active', d.dataset.accent === n)); }
@@ -1713,8 +2066,11 @@
   function resetForm() { ['#readingStart', '#readingEnd', '#directKwh', '#driverName', '#carModel', '#discount'].forEach((s) => { $(s).value = ''; }); $('#serviceFee').value = settings.serviceFee > 0 ? settings.serviceFee : ''; taState.torre = null; taState.piso = null; taState.unit = null; renderTA(); updateLive(); }
 
   function init() {
-    registerSW(); setupInstall(); buildTAChips(); renderTA(); buildAvDias(); loadSettingsUI();
-    stations = DEMO_STATIONS.slice(); // arranque inmediato; se reemplaza con datos en vivo
+    registerSW(); setupInstall(); fillConjuntoSelects(); buildTAChips(); renderTA(); buildAvDias(); loadSettingsUI();
+    buildHeroCar();
+    // Los puestos de ejemplo solo tienen sentido mientras se desarrolla:
+    // en el conjunto real nadie debe ver cargadores que no existen.
+    if (DEMO_ON) stations = DEMO_STATIONS.slice();
     setBattery(100);
     document.addEventListener('pointerdown', addRipple, { passive: true });
 
@@ -1722,12 +2078,12 @@
       VB = vb;
       VB.onAuth((u) => {
         const wasAdmin = isAdmin(); user = u; renderAuthUI(); startWatchers();
-        if (u) { closeSheet('#loginSheet'); syncPendingSessions(); } else { syncDone = false; }
-        refreshAll(); if (!u && wasAdmin) refreshMode();
+        if (u) { closeSheet('#loginSheet'); syncPendingSessions(); checkWompiReturn(); setupPush(); } else { syncDone = false; }
+        refreshAll(); syncHeroCar(); if (!u && wasAdmin) refreshMode();
       });
       unsubs.st = VB.watchStations((list) => {
         const res = list.filter((s) => (s.conjunto || 'montreal') === CONJUNTO);
-        stations = res.length ? res : DEMO_STATIONS.slice();
+        stations = res.length ? res : (DEMO_ON ? DEMO_STATIONS.slice() : []);
         backendOff = false; hideNotice();
         if (currentView === 'buscar') runSearch();
       }, (e) => { backendOff = true; useFallback(); if (String(e && e.code).includes('permission')) showNotice('Faltan publicar las reglas de seguridad de Firestore (te muestro los puestos de ejemplo mientras tanto).'); });
@@ -1803,6 +2159,23 @@
     $('#spQrInput').addEventListener('change', async () => { const f = $('#spQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), url); toast('QR cargado 📷'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#spQrInput').value = ''; });
     $('#spQrRemove').addEventListener('click', () => { spotQr = ''; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), null); });
 
+    // Pago en línea (Wompi)
+    $('#spWompiOn').addEventListener('click', () => {
+      setWompiSwitch(!$('#spWompiOn').classList.contains('is-on'));
+      updateWompiState();
+    });
+    ['#spWompiKey', '#spWompiSecret'].forEach((s) => $(s).addEventListener('input', updateWompiState));
+
+    // Lectura del contador con la cámara
+    $$('.in-cam').forEach((b) => b.addEventListener('click', () => {
+      if (!window.VOCR) { toast('El lector no está disponible', 'error'); return; }
+      const target = b.dataset.cam;
+      window.VOCR.open({
+        label: target === 'readingStart' ? 'de antes de conectar' : 'de después de cargar',
+        onUse: (v) => { $('#' + target).value = v; updateLive(); toast('Lectura registrada 📷'); }
+      });
+    }));
+
     // Fotos del puesto
     $('#spFotoPick').addEventListener('click', () => $('#spFotoInput').click());
     $('#spFotoInput').addEventListener('change', async () => {
@@ -1857,7 +2230,7 @@
     $('#setServiceFee').addEventListener('input', () => { settings.serviceFee = Math.max(0, parseNum($('#setServiceFee').value)); persistSettings(); });
     $('#setEff').addEventListener('input', () => { settings.kmPerKwh = Math.max(0, parseNum($('#setEff').value)) || 6; persistSettings(); });
     $$('#accentRow .accent-dot').forEach((d) => d.addEventListener('click', () => { applyAccent(d.dataset.accent); persistSettings(); }));
-    $$('#vehRow .veh-btn').forEach((b) => b.addEventListener('click', () => { applyVehicle(b.dataset.veh); persistSettings(); toast('Vehículo actualizado 🚙'); }));
+    $$('#vehRow .veh-btn').forEach((b) => b.addEventListener('click', () => { applyVehicle(b.dataset.veh); persistSettings(); syncHeroCar(); toast('Vehículo actualizado 🚙'); }));
     $('#setAnim').addEventListener('click', () => { settings.animations = !settings.animations; const sw = $('#setAnim'); sw.classList.toggle('is-on', settings.animations); sw.setAttribute('aria-checked', String(settings.animations)); persistSettings(); });
     $('#resetBtn').addEventListener('click', () => { if (confirm('¿Restablecer datos locales (ajustes y recibos)?')) { [LS_SETTINGS, LS_SESSIONS].forEach((k) => localStorage.removeItem(k)); settings = Object.assign({}, DEFAULTS); sessions = []; loadSettingsUI(); renderHistory(); resetForm(); $('#roleGate').classList.remove('hidden'); toast('Datos locales restablecidos'); } });
 
@@ -1869,6 +2242,8 @@
   }
   // exponer para renderAuthUI (edición de puesto)
   window.__spotEditing = false;
+  // Lo que los módulos sueltos (OCR, reporte) necesitan de la app.
+  window.VoltioUI = { openSheet, closeSheet, toast };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
