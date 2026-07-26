@@ -11,7 +11,7 @@ import {
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, limit, serverTimestamp, runTransaction, increment
+  query, where, orderBy, limit, serverTimestamp, runTransaction, increment, writeBatch
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig, vapidKey } from './firebase-config.js';
 
@@ -153,6 +153,64 @@ const VB = {
 
   async updateStationFields(id, patch) {
     await updateDoc(doc(db, 'stations', id), Object.assign({}, patch, { updatedAt: serverTimestamp() }));
+  },
+
+  /* ---------- Franjas horarias: dos vecinos no pueden pedir la misma hora ----------
+     Cada reserva aparta sus cuartos de hora como documentos con id fijo
+     (puesto + fecha + hora). Como Firestore rechaza crear un id que ya existe y
+     el lote es todo-o-nada, el choque lo impide el servidor: aunque dos vecinos
+     toquen "Agendar" en el mismo segundo, solo uno se queda con la hora.
+
+     El último medio cuarto no se aparta a propósito: así una reserva puede
+     empezar cuando otra va terminando (hasta 15 minutos de relevo). */
+  SLOT_MIN: 15,
+  slotKeys(fecha, from, to) {
+    const min = (h) => { const p = String(h || '0:0').split(':'); return (+p[0]) * 60 + (+p[1]); };
+    const grid = (m) => Math.floor(m / 15) * 15;
+    const ini = grid(min(from));
+    const fin = Math.max(ini, grid(min(to)) - 30); // 30 = dos cuartos de relevo
+    const out = [];
+    for (let m = ini; m <= fin; m += 15) {
+      out.push(String(Math.floor(m / 60)).padStart(2, '0') + String(m % 60).padStart(2, '0'));
+    }
+    return out;
+  },
+  slotId(stationId, fecha, hhmm) { return `${stationId}__${fecha}__${hhmm}`; },
+  // Una sola clave por puesto y día: así la consulta necesita un índice simple.
+  sfKey(stationId, fecha) { return `${stationId}__${fecha}`; },
+
+  /* Aparta las horas. Si alguna está tomada, no se aparta ninguna. */
+  async claimSlots(bk, bookingId) {
+    const uid = VB.uid();
+    if (!uid) throw new Error('login');
+    const keys = VB.slotKeys(bk.fecha, bk.from, bk.to);
+    const batch = writeBatch(db);
+    keys.forEach((hhmm) => {
+      batch.set(doc(db, 'slots', VB.slotId(bk.stationId, bk.fecha, hhmm)), {
+        stationId: bk.stationId, fecha: bk.fecha, hhmm,
+        sfKey: VB.sfKey(bk.stationId, bk.fecha),
+        bookingId: bookingId || '', driverUid: uid, ownerUid: bk.ownerUid || '',
+        at: serverTimestamp()
+      });
+    });
+    await batch.commit();
+    return keys;
+  },
+  /* Libera las horas de una reserva (cancelada, declinada o vencida). */
+  async releaseSlots(bk) {
+    if (!bk || !bk.stationId || !bk.fecha) return;
+    const keys = VB.slotKeys(bk.fecha, bk.from, bk.to);
+    const batch = writeBatch(db);
+    keys.forEach((hhmm) => batch.delete(doc(db, 'slots', VB.slotId(bk.stationId, bk.fecha, hhmm))));
+    try { await batch.commit(); } catch (e) { /* si ya no están, mejor */ }
+  },
+  /* Horas ya tomadas de un puesto en un día, para pintarlas en la ficha. */
+  async busySlots(stationId, fecha) {
+    try {
+      const q = query(collection(db, 'slots'), where('sfKey', '==', VB.sfKey(stationId, fecha)));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    } catch (e) { return []; }
   },
 
   /* ---------- Reservas ---------- */
@@ -363,6 +421,33 @@ const VB = {
     // Nunca enviamos 'role' desde aquí (lo controla el admin / las reglas).
     const clean = Object.assign({}, patch); delete clean.role;
     await setDoc(doc(db, 'users', uid), Object.assign(clean, { updatedAt: serverTimestamp() }), { merge: true });
+  },
+
+  /* ---------- Código del conjunto ----------
+     El código vive en config/acceso, un documento que NINGÚN cliente puede
+     leer: solo las reglas de seguridad lo consultan para comparar. Por eso
+     mandamos el código escrito y es el servidor el que decide si la cuenta
+     queda verificada — no hay forma de marcarse vecino a pulso. */
+  async verificarCodigo(codigo) {
+    const uid = VB.uid();
+    if (!uid) throw new Error('login');
+    const limpio = String(codigo || '').trim().toUpperCase();
+    if (!limpio) throw new Error('Escribe el código que te dio la administración.');
+    try {
+      await setDoc(doc(db, 'users', uid), {
+        codigoIngresado: limpio, verificado: true, verificadoAt: serverTimestamp()
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      if (String(e && e.code).includes('permission')) throw new Error('Ese código no es el del conjunto. Revísalo con la administración.');
+      throw new Error('No pudimos validar el código. Intenta de nuevo.');
+    }
+  },
+  // El administrador puede dar acceso a mano (por ejemplo, a un vecino nuevo).
+  async setUserVerified(uid, verificado) {
+    await updateDoc(doc(db, 'users', uid), {
+      verificado: !!verificado, verificadoAt: verificado ? serverTimestamp() : null, updatedAt: serverTimestamp()
+    });
   },
 
   /* Gustos del residente (vehículo, color, precio…): viajan con la cuenta,

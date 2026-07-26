@@ -195,6 +195,21 @@ async function unseed() {
   console.log('LISTO: el conjunto ya solo verá puestos reales.');
 }
 
+/* Fija el código con el que un vecino se marca como verificado.
+   Vive en config/acceso, un documento que las reglas leen pero ningún cliente
+   puede: por eso no queda expuesto en el JavaScript de la app.
+   Uso: node scripts/backend-setup.js codigo MONTREAL2026 */
+async function codigo() {
+  const nuevo = String(process.argv[3] || '').trim().toUpperCase();
+  if (!nuevo) { console.log('Falta el código. Uso: node scripts/backend-setup.js codigo MONTREAL2026'); return; }
+  if (nuevo.length < 4) { console.log('Ponle al menos 4 caracteres.'); return; }
+  const r = await api('PATCH',
+    `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default/documents/config/acceso`,
+    { fields: { codigo: F.s(nuevo), updatedAt: F.ts() } });
+  console.log('código del conjunto ->', r.status === 200 ? 'guardado: ' + nuevo : `${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
+  if (r.status === 200) console.log('Repártelo entre tus vecinos. Para cambiarlo, vuelve a correr este comando.');
+}
+
 /* ============================ CHECK ============================ */
 async function check() {
   const db = await api('GET', `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/default`);
@@ -283,6 +298,7 @@ async function iam() {
   if (cmd === 'setup') await setup();
   else if (cmd === 'seed') await seed();
   else if (cmd === 'unseed') await unseed();
+  else if (cmd === 'codigo') await codigo();
   else if (cmd === 'google') await tryGoogle();
   else if (cmd === 'check') await check();
   else if (cmd === 'iam') await iam();

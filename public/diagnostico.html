@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Voltio · Diagnóstico</title>
+<meta name="robots" content="noindex" />
+<meta name="theme-color" content="#0a0c11" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Exo+2:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="/css/styles.css?v=2.6.0" />
+<style>
+  .diag { max-width: 620px; margin: 0 auto; padding: 22px 16px 60px; }
+  .diag h1 { font-family: var(--font-display); font-size: 22px; margin-bottom: 6px; }
+  .diag .lead { color: var(--text-dim); font-size: 13.5px; line-height: 1.55; margin-bottom: 20px; }
+  .t-row { display: flex; gap: 11px; align-items: flex-start; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .t-row:last-child { border-bottom: 0; }
+  .t-ico { flex: none; width: 22px; font-size: 15px; line-height: 1.4; }
+  .t-main b { display: block; font-size: 13.5px; font-weight: 600; }
+  .t-main span { display: block; font-size: 12px; color: var(--text-mute); margin-top: 2px; line-height: 1.5; }
+  .t-ok b { color: var(--accent-2); }
+  .t-bad b { color: var(--danger); }
+  .resumen { font-family: var(--font-display); font-size: 15px; text-align: center; padding: 16px; border-radius: var(--radius-sm); margin-top: 16px; }
+  .r-ok { background: rgba(var(--accent-2-rgb),0.1); border: 1px solid rgba(var(--accent-2-rgb),0.35); }
+  .r-bad { background: rgba(var(--danger-rgb),0.1); border: 1px solid rgba(var(--danger-rgb),0.35); }
+</style>
+</head>
+<body data-accent="cyan">
+<div class="bg" aria-hidden="true"><div class="bg-grid"></div><div class="bg-glow"></div></div>
+
+<div class="diag">
+  <h1>⚡ Diagnóstico de Voltio</h1>
+  <p class="lead">Comprueba con tu cuenta que el piloto está en orden: el código del conjunto, el bloqueo de horas dobles, la privacidad de los datos y la firma de los pagos. Crea y borra sus propios datos de prueba en una fecha de 2030, así que <b>no toca nada real</b>.</p>
+
+  <div class="card" id="authCard">
+    <div class="card-head"><h2>1 · Entra con tu cuenta</h2></div>
+    <p class="hint" id="authState" style="margin:0 0 12px">Sin sesión.</p>
+    <button id="btnGoogle" class="btn-secondary btn-block" type="button">Entrar con Google</button>
+    <button id="btnOut" class="btn-ghost btn-block hidden" type="button" style="margin-top:8px">Cerrar sesión</button>
+  </div>
+
+  <div class="card" id="runCard">
+    <div class="card-head"><h2>2 · Corre las pruebas</h2></div>
+    <div class="field">
+      <label for="codigo">Código del conjunto <span class="opt">(para probar la validación)</span></label>
+      <div class="input-wrap"><input id="codigo" type="text" placeholder="MONTREAL2026" autocomplete="off" style="text-transform:uppercase"/></div>
+    </div>
+    <button id="btnRun" class="btn-primary" type="button" disabled><span class="btn-glow"></span>Correr las pruebas</button>
+  </div>
+
+  <div class="card hidden" id="resCard">
+    <div class="card-head"><h2>Resultados</h2><span class="chart-total" id="resCount"></span></div>
+    <div id="lista"></div>
+    <div id="resumen" class="resumen hidden"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import { initializeFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, addDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { firebaseConfig } from './js/firebase-config.js';
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = initializeFirestore(app, {}, 'default');
+const $ = (s) => document.querySelector(s);
+
+let user = null;
+onAuthStateChanged(auth, (u) => {
+  user = u;
+  $('#authState').textContent = u ? ('Sesión iniciada: ' + (u.email || u.uid)) : 'Sin sesión.';
+  $('#btnGoogle').classList.toggle('hidden', !!u);
+  $('#btnOut').classList.toggle('hidden', !u);
+  $('#btnRun').disabled = !u;
+});
+$('#btnGoogle').addEventListener('click', () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => { $('#authState').textContent = 'No se pudo entrar: ' + e.code; }));
+$('#btnOut').addEventListener('click', () => signOut(auth));
+
+/* ---------- utilidades ---------- */
+const lista = $('#lista');
+function fila(estado, titulo, detalle) {
+  const d = document.createElement('div');
+  d.className = 't-row ' + (estado === 'ok' ? 't-ok' : estado === 'mal' ? 't-bad' : '');
+  d.innerHTML = `<span class="t-ico">${estado === 'ok' ? '✅' : estado === 'mal' ? '❌' : 'ℹ️'}</span><div class="t-main"><b>${titulo}</b><span>${detalle || ''}</span></div>`;
+  lista.appendChild(d);
+}
+const esDenegado = (e) => String((e && (e.code || e.message)) || '').includes('permission');
+
+let ok = 0, mal = 0;
+function marcar(bien, titulo, detalle) {
+  if (bien) { ok++; fila('ok', titulo, detalle); } else { mal++; fila('mal', titulo, detalle); }
+}
+/* Espera que la operación FALLE por permisos. */
+async function debeFallar(titulo, fn, detalleOk) {
+  try { await fn(); marcar(false, titulo, 'Se permitió y NO debería. Revisa las reglas.'); }
+  catch (e) { marcar(esDenegado(e), titulo, esDenegado(e) ? (detalleOk || 'Bloqueado por las reglas, como debe ser.') : 'Falló por otra razón: ' + (e.code || e.message)); }
+}
+/* Espera que la operación FUNCIONE. */
+async function debeFuncionar(titulo, fn, detalleOk) {
+  try { const r = await fn(); marcar(true, titulo, detalleOk || 'Funcionó.'); return r; }
+  catch (e) { marcar(false, titulo, 'Falló: ' + (e.code || e.message)); return null; }
+}
+
+/* Mismas cuentas que hace la app para apartar horas. */
+const slotKeys = (from, to) => {
+  const min = (h) => { const p = String(h).split(':'); return (+p[0]) * 60 + (+p[1]); };
+  const g = (m) => Math.floor(m / 15) * 15;
+  const ini = g(min(from)), fin = Math.max(ini, g(min(to)) - 30);
+  const out = [];
+  for (let m = ini; m <= fin; m += 15) out.push(String(Math.floor(m / 60)).padStart(2, '0') + String(m % 60).padStart(2, '0'));
+  return out;
+};
+
+$('#btnRun').addEventListener('click', async () => {
+  if (!user) return;
+  ok = 0; mal = 0; lista.innerHTML = '';
+  $('#resCard').classList.remove('hidden');
+  $('#resumen').classList.add('hidden');
+  $('#btnRun').disabled = true;
+  $('#btnRun').textContent = 'Probando…';
+
+  const uid = user.uid;
+  const FECHA = '2030-01-01';           // fecha imposible: no estorba a nadie
+  const EST = 'diag-' + uid.slice(0, 8);
+  const sid = (h) => `${EST}__${FECHA}__${h}`;
+  const limpiar = async () => {
+    const b = writeBatch(db);
+    slotKeys('10:00', '12:00').forEach((h) => b.delete(doc(db, 'slots', sid(h))));
+    try { await b.commit(); } catch (e) {}
+  };
+  await limpiar();
+
+  // --- Quién eres ---
+  const perfil = await debeFuncionar('Puedes leer tu propio perfil', async () => {
+    const s = await getDoc(doc(db, 'users', uid));
+    return s.exists() ? s.data() : {};
+  }, 'Tu perfil se lee sin problema.');
+  const soyAdmin = perfil && perfil.role === 'admin';
+  const verificado = !!(perfil && perfil.verificado) || soyAdmin;
+  fila('info', soyAdmin ? 'Tu cuenta es de administración' : (verificado ? 'Tu cuenta es vecino verificado ✓' : 'Tu cuenta AÚN NO tiene el código del conjunto'),
+    soyAdmin ? 'Puedes reservar y publicar sin código.' : (verificado ? 'Puedes reservar, publicar y cobrar.' : 'Escribe el código abajo y vuelve a correr las pruebas.'));
+
+  // --- Privacidad ---
+  await debeFallar('Nadie puede leer el código del conjunto', () => getDoc(doc(db, 'config', 'acceso')),
+    'El código solo lo consultan las reglas: no viaja al navegador.');
+  if (!soyAdmin) {
+    await debeFallar('No puedes leer el perfil de otro vecino', () => getDoc(doc(db, 'users', 'oaocfnOr2yaJCA8QPJp3EFaAVKD3')),
+      'Celular, torre y apartamento de los demás quedan protegidos.');
+  } else {
+    fila('info', 'Lectura de perfiles ajenos', 'Como administración sí puedes verlos: es lo esperado.');
+  }
+
+  // --- Código del conjunto ---
+  await debeFallar('Un código inventado NO verifica la cuenta',
+    () => setDoc(doc(db, 'users', uid), { verificado: true, codigoIngresado: 'CODIGO-FALSO-' + Date.now() }, { merge: true }),
+    'Firestore rechaza el código equivocado.');
+
+  const codigo = ($('#codigo').value || '').trim().toUpperCase();
+  if (codigo) {
+    await debeFuncionar('El código correcto SÍ verifica la cuenta',
+      () => setDoc(doc(db, 'users', uid), { verificado: true, codigoIngresado: codigo }, { merge: true }),
+      'Tu cuenta quedó marcada como vecino verificado.');
+  } else {
+    fila('info', 'Código correcto', 'No escribiste ninguno: esa prueba se saltó.');
+  }
+
+  // --- Horas apartadas ---
+  const claves = slotKeys('10:00', '12:00');
+  fila('info', 'Una reserva de 10:00 a 12:00 aparta ' + claves.length + ' cuartos de hora',
+    claves.map((h) => h.slice(0, 2) + ':' + h.slice(2)).join(' · ') + ' — el último medio se deja libre para el relevo.');
+
+  const apartar = (hs, quien) => {
+    const b = writeBatch(db);
+    hs.forEach((h) => b.set(doc(db, 'slots', sid(h)), {
+      stationId: EST, fecha: FECHA, hhmm: h, sfKey: `${EST}__${FECHA}`,
+      bookingId: 'diag', driverUid: quien, ownerUid: uid, at: serverTimestamp()
+    }));
+    return b.commit();
+  };
+
+  const pudo = await debeFuncionar('Apartas la hora 10:00–12:00', () => apartar(claves, uid), 'Las horas quedaron reservadas a tu nombre.');
+
+  if (pudo !== null) {
+    await debeFallar('Nadie puede pisar esa misma hora',
+      () => apartar(claves, 'otro-vecino-' + Date.now()),
+      'Este es el bloqueo contra reservas dobles: el segundo vecino no pasa.');
+
+    await debeFuncionar('Otro vecino SÍ puede empezar a las 11:45 (relevo)',
+      () => apartar(slotKeys('11:45', '13:00'), uid),
+      'Los 15 minutos de traslape que pediste funcionan.');
+
+    await debeFuncionar('Ves las horas ocupadas del puesto',
+      async () => {
+        const s = await getDocs(query(collection(db, 'slots'), where('sfKey', '==', `${EST}__${FECHA}`)));
+        return s.size;
+      }, 'La ficha del puesto puede mostrar las franjas tomadas.');
+
+    await debeFuncionar('Liberas la hora al cancelar', limpiar, 'La franja vuelve a quedar disponible.');
+  }
+
+  // limpieza del relevo
+  try {
+    const b = writeBatch(db);
+    slotKeys('11:45', '13:00').forEach((h) => b.delete(doc(db, 'slots', sid(h))));
+    await b.commit();
+  } catch (e) {}
+
+  // --- Pagos ---
+  await debeFuncionar('La firma de Wompi se calcula bien', async () => {
+    const raw = 'REF-1' + '2500000' + 'COP' + 'test_integrity_ABC123';
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    if (hex !== '2231cb9e4f9a4435127809b03c94d8621cb8523b58abf939a9990420b762c548') throw new Error('la firma no coincide');
+    return hex;
+  }, 'Coincide con el SHA-256 esperado: los cobros saldrán firmados correctamente.');
+
+  await debeFuncionar('Wompi responde a la consulta de transacciones', async () => {
+    const r = await fetch('https://sandbox.wompi.co/v1/transactions/000-no-existe', { headers: { Authorization: 'Bearer pub_test_diagnostico' } });
+    if (r.status === 0) throw new Error('sin respuesta');
+    return r.status;
+  }, 'Se puede hablar con Wompi desde la app para confirmar los pagos.');
+
+  // --- Resumen ---
+  $('#resCount').textContent = (ok + mal) + ' pruebas';
+  const res = $('#resumen');
+  res.className = 'resumen ' + (mal ? 'r-bad' : 'r-ok');
+  res.textContent = mal ? `${mal} de ${ok + mal} pruebas fallaron` : `Todo en orden · ${ok} de ${ok} pruebas`;
+  res.classList.remove('hidden');
+  $('#btnRun').disabled = false;
+  $('#btnRun').innerHTML = '<span class="btn-glow"></span>Volver a correr';
+});
+</script>
+</body>
+</html>

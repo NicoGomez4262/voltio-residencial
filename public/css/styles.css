@@ -1179,6 +1179,37 @@ button { -webkit-tap-highlight-color: transparent; }
 .ocr-result-box { margin-top: 14px; padding: 14px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid rgba(var(--accent-rgb), 0.3); }
 .ocr-result-label { display: block; font-size: 11px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text-mute); margin-bottom: 9px; }
 
+/* =========================================================
+   v2.6 — Horas apartadas, código del conjunto y recordatorio
+   ========================================================= */
+.bk-busy {
+  font-size: 12.5px; line-height: 1.55; color: var(--text-dim);
+  padding: 11px 13px; margin: 0 0 14px; border-radius: var(--radius-sm);
+  background: rgba(var(--danger-rgb), 0.07); border: 1px solid rgba(var(--danger-rgb), 0.25);
+}
+.bk-busy b { color: var(--text); font-family: var(--font-display); font-size: 12.5px; }
+.bk-busy small { display: block; margin-top: 6px; color: var(--text-mute); font-size: 11.5px; }
+.bk-busy-free { background: rgba(var(--accent-2-rgb), 0.07); border-color: rgba(var(--accent-2-rgb), 0.25); }
+
+.gate-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 15px; margin-bottom: 14px; border-radius: var(--radius-sm);
+  background: rgba(var(--accent-rgb), 0.08); border: 1px solid rgba(var(--accent-rgb), 0.28);
+}
+.gate-banner b { display: block; font-size: 13.5px; }
+.gate-banner span { display: block; margin-top: 3px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.gate-banner button { flex: none; }
+
+.today-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 15px; margin-bottom: 14px; border-radius: var(--radius-sm);
+  background: linear-gradient(100deg, rgba(var(--accent-rgb), 0.14), rgba(var(--accent-rgb), 0.04));
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+}
+.today-ico { flex: none; font-size: 20px; }
+.today-banner b { display: block; font-size: 13.5px; color: var(--text); }
+.today-banner span { display: block; margin-top: 3px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
 /* Sin selector de vehículo (administración), el color no necesita separación extra */
 #vehBlock:not(.hidden) + #accentLabel { margin-top: 16px; }
 

@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Exo+2:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="/css/styles.css?v=2.5.0" />
+  <link rel="stylesheet" href="/css/styles.css?v=2.6.0" />
 </head>
 <body data-accent="cyan">
   <div class="bg" aria-hidden="true">
@@ -54,6 +54,7 @@
       <section id="view-buscar" class="view" aria-label="Buscar cargador" hidden>
         <div id="buscarNotice" class="notice hidden"></div>
 
+        <div class="gate-banner hidden" id="gateBuscar"></div>
         <div class="hero-car-slot" id="slotBuscar"></div>
 
         <div class="hero-search">
@@ -130,6 +131,7 @@
             <button class="btn-secondary btn-block js-open-login" type="button" style="max-width:240px;margin:12px auto 0">Iniciar sesión</button>
           </div>
         </div>
+        <div class="today-banner hidden" id="todayRes"></div>
         <div id="resContent">
           <div class="card cal-card">
             <div class="card-head"><h2>Tu agenda de cargas</h2><span class="chart-total" id="resWeekLbl"></span></div>
@@ -164,7 +166,9 @@
         </div>
 
         <div id="novContent">
+          <div class="gate-banner hidden" id="gateNov"></div>
           <div class="hero-car-slot" id="slotNov"></div>
+          <div class="today-banner hidden" id="todayNov"></div>
           <div class="notif-banner" id="notifBanner">
             <div><b>🔔 Activa las notificaciones</b><span>Entérate al instante cuando un vecino solicite tu puesto o te escriba.</span></div>
             <button id="notifEnable" class="btn-secondary btn-sm" type="button">Activar</button>
@@ -441,6 +445,20 @@
           </div>
         </div>
 
+        <div class="card hidden" id="accesoCard">
+          <div class="card-head"><h2>Acceso al conjunto</h2><span class="sc-badge b-ver hidden" id="accesoBadge">✓ Vecino verificado</span></div>
+          <div id="accesoPendiente">
+            <p class="hint" style="margin:0 0 12px">Escribe el código que reparte la administración de MontReal. Con él quedas marcado como <b>vecino verificado</b> y puedes reservar, publicar tu puesto y recibir pagos.</p>
+            <div class="field"><label for="acCodigo">Código del conjunto</label><div class="input-wrap"><input id="acCodigo" type="text" placeholder="Ej: MONTREAL2026" autocomplete="off" spellcheck="false" style="text-transform:uppercase"/></div></div>
+            <p id="acError" class="form-error hidden"></p>
+            <button id="acSave" class="btn-secondary btn-block" type="button">Validar mi código</button>
+            <p class="hint">¿No lo tienes? Pídeselo a la administración o escríbele por el chat a un vecino que ya esté dentro.</p>
+          </div>
+          <div id="accesoOk" class="hidden">
+            <p class="hint" style="margin:0">✅ Tu cuenta está verificada como vecino de MontReal. Los demás ven el distintivo <b>✓ Vecino verificado</b> en tu puesto y en tus reservas.</p>
+          </div>
+        </div>
+
         <div class="card hidden" id="profileCard">
           <div class="card-head"><h2>Tu información en el conjunto</h2></div>
           <p class="hint" style="margin:0 0 12px">Ayuda a la administración a identificarte y a coordinar la carga. Solo la administración puede ver estos datos.</p>
@@ -511,7 +529,7 @@
           <div class="data-actions"><button id="exportBtn2" class="btn-ghost" type="button">Exportar recibos (CSV)</button><button id="resetBtn" class="btn-ghost btn-danger" type="button">Restablecer datos locales</button></div>
         </div>
 
-        <p class="version">Voltio Residencial v2.5.0 · Piloto conjunto MontReal ⚡</p>
+        <p class="version">Voltio Residencial v2.6.0 · Piloto conjunto MontReal ⚡</p>
       </section>
 
       <!-- ============ ADMIN: PANEL ============ -->
@@ -856,10 +874,10 @@
     </defs>
   </svg>
 
-  <script type="module" src="/js/backend.js?v=2.5.0"></script>
-  <script defer src="/js/reporte.js?v=2.5.0"></script>
-  <script defer src="/js/wompi.js?v=2.5.0"></script>
-  <script defer src="/js/ocr.js?v=2.5.0"></script>
-  <script defer src="/js/app.js?v=2.5.0"></script>
+  <script type="module" src="/js/backend.js?v=2.6.0"></script>
+  <script defer src="/js/reporte.js?v=2.6.0"></script>
+  <script defer src="/js/wompi.js?v=2.6.0"></script>
+  <script defer src="/js/ocr.js?v=2.6.0"></script>
+  <script defer src="/js/app.js?v=2.6.0"></script>
 </body>
 </html>

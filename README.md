@@ -159,6 +159,38 @@ v2.4 agrega:
 > `node scripts/backend-setup.js rules` — la base de este proyecto se llama `default`,
 > así que el release es `cloud.firestore/default`.
 
+## 🔒 v2.6 — Nadie pisa la hora de otro, y solo entran los del conjunto
+
+- **⛔ Reservas dobles, imposibles.** Cada reserva aparta sus cuartos de hora como
+  documentos con id fijo (`puesto__fecha__hora`). Como Firestore rechaza crear un id
+  que ya existe y el lote es todo-o-nada, **el choque lo impide el servidor**: aunque
+  dos vecinos toquen *Agendar* en el mismo segundo, solo uno se queda con la hora.
+  El último medio cuarto no se aparta a propósito, así que **una carga puede empezar
+  cuando otra va terminando (hasta 15 minutos de relevo)**. En la ficha del puesto se
+  ven las franjas ya tomadas, y cancelar o declinar libera la hora.
+- **🔐 Código del conjunto.** Sin él se puede mirar la app, pero no reservar ni publicar.
+  El código vive en `config/acceso`, **un documento que ningún cliente puede leer**:
+  solo lo consultan las reglas de seguridad para comparar, así que no queda expuesto
+  en el JavaScript. Quien lo mete queda con el distintivo **✓ Vecino verificado**,
+  visible en su puesto y en sus reservas. La administración puede verificar a alguien
+  a mano desde *Usuarios*.
+  Se cambia con `node scripts/backend-setup.js codigo MONTREAL2026`.
+- **🗑️ Cancelar una reserva confirmada** (antes solo se podían cancelar las pendientes),
+  con aviso extra si ya tenía un pago registrado.
+- **📅 Recordatorio del día**: al abrir la app, "Hoy cargas a las 3:00 p.m. · Torre 2 ·
+  puesto P-208". Al anfitrión le avisa a quién recibe hoy. Sin depender de push.
+- **🔎 Privacidad reforzada**: el perfil de un vecino (celular, torre, apartamento) ya
+  solo lo leen su dueño y la administración. Antes lo veía cualquier cuenta con sesión.
+
+### Comprobarlo tú mismo
+
+- `node scripts/test-rules.js` — 24 casos contra el simulador de reglas de Firebase
+  (necesita el permiso `firebaserules.rulesets.test` en la cuenta de servicio).
+- **https://voltio-red.web.app/diagnostico.html** — entras con tu cuenta y corre las
+  pruebas de verdad contra Firestore: código correcto e incorrecto, bloqueo de horas
+  dobles, relevo de 15 minutos, privacidad y firma de Wompi. Usa una fecha de 2030 y
+  borra lo que crea, así que no toca datos reales.
+
 ## 🚀 v2.5 — Lista para el piloto real
 
 - **💳 Pago en línea con Wompi (tarjeta, PSE, Nequi)** — opcional y por anfitrión.

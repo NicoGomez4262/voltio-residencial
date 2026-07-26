@@ -11,6 +11,24 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // ¿La cuenta entró con el código del conjunto? Solo un vecino verificado
+    // (o la administración) puede reservar, publicar o apartar horas.
+    function verificado() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificado == true;
+    }
+    function delConjunto() { return isAdmin() || verificado(); }
+
+    // El código real vive en config/acceso, que nadie puede leer: las reglas sí.
+    // Marcarse 'verificado' exige mandar el código correcto; no hay atajo.
+    function codigoOk() {
+      return !('verificado' in request.resource.data)
+        || request.resource.data.verificado != true
+        || request.resource.data.codigoIngresado ==
+             get(/databases/$(database)/documents/config/acceso).data.codigo;
+    }
+
     // Terceros solo pueden tocar los agregados de calificación de una estación.
     function onlyRating() {
       return request.resource.data.diff(resource.data).affectedKeys()
@@ -34,26 +52,33 @@ service cloud.firestore {
         .hasAny(['pagado', 'pagadoAt', 'pagadoPor', 'pagoMetodo', 'kwhReal', 'totalReal', 'sessionId']);
     }
 
+    // El código del conjunto: ilegible para todos: solo lo consultan estas reglas.
+    // Se cambia con `node scripts/backend-setup.js codigo <NUEVO>`.
+    match /config/{doc} {
+      allow read, write: if false;
+    }
+
     // Perfiles de usuario / residentes
     match /users/{uid} {
-      // Lectura puntual para autenticados (nombres en chats, etc.).
-      allow get: if signedIn();
-      // Listar toda la colección: solo el admin (protege celular/torre/apto).
+      // Cada quien ve su perfil; la administración, el de todos. Nadie más:
+      // aquí viven celular, torre, apartamento y el código que escribió.
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
 
-      // Al crear, nadie puede autoasignarse un rol distinto de 'guest'.
+      // Al crear, nadie puede autoasignarse un rol ni darse por verificado.
       allow create: if signedIn() && request.auth.uid == uid
-        && (!('role' in request.resource.data) || request.resource.data.role == 'guest');
+        && (!('role' in request.resource.data) || request.resource.data.role == 'guest')
+        && codigoOk();
 
       // Cada quien edita su perfil sin tocar 'role'; el admin puede todo.
-      allow update: if (signedIn() && request.auth.uid == uid && roleUnchanged())
+      allow update: if (signedIn() && request.auth.uid == uid && roleUnchanged() && codigoOk())
         || isAdmin();
     }
 
     // Estaciones / puestos de carga: lectura pública, escritura del dueño o admin.
     match /stations/{id} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow create: if delConjunto() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if (signedIn() && (resource.data.ownerUid == request.auth.uid || onlyRating()))
         || isAdmin();
       allow delete: if (signedIn() && resource.data.ownerUid == request.auth.uid)
@@ -69,9 +94,20 @@ service cloud.firestore {
       }
     }
 
+    // Franjas horarias apartadas. El id es fijo (puesto__fecha__hora), así que
+    // crear una que ya existe falla: ahí está el bloqueo contra reservas dobles.
+    // No se permite 'update': una hora se libera borrándola, no pisándola.
+    match /slots/{slotId} {
+      allow read: if signedIn();
+      allow create: if delConjunto() && request.resource.data.driverUid == request.auth.uid;
+      allow delete: if isAdmin()
+        || (signedIn() && (resource.data.driverUid == request.auth.uid
+                        || resource.data.ownerUid == request.auth.uid));
+    }
+
     // Reservas: conductor y anfitrión involucrados, y el admin del conjunto.
     match /bookings/{id} {
-      allow create: if signedIn() && request.resource.data.driverUid == request.auth.uid;
+      allow create: if delConjunto() && request.resource.data.driverUid == request.auth.uid;
       allow read: if (signedIn() &&
           (resource.data.driverUid == request.auth.uid ||
            resource.data.ownerUid == request.auth.uid))

@@ -239,6 +239,7 @@
       $('#accAvatar').innerHTML = photo ? `<img src="${escapeHtml(photo)}" alt=""/>` : escapeHtml(name[0].toUpperCase());
       $('#accName').textContent = name; $('#accEmail').textContent = user.email || '';
       const b = [];
+      if (esVecino()) b.push('<span class="sc-badge b-ver">✓ Vecino verificado</span>');
       if (VB.isGoogle()) b.push('<span class="sc-badge b-ver">✓ Google</span>');
       if (user.emailVerified) b.push('<span class="sc-badge b-ok">✓ Correo verificado</span>');
       b.push('<span class="sc-badge b-id">🪪 Identidad: próximamente</span>');
@@ -250,6 +251,8 @@
     $('#puestoForm').classList.toggle('hidden', !logged || (myStationDoc && !window.__spotEditing));
     $('#adminCard').classList.toggle('hidden', !isAdmin());
     applyAdminSettingsView(logged);
+    loadAccesoUI();
+    renderGate();
   }
   /* El administrador no vive en la app como vecino: no tiene puesto, no cobra
      energía y no arma recibos. Le dejamos solo lo suyo. */
@@ -287,6 +290,7 @@
     const nowAdmin = isAdmin();
     syncPrefsOnLogin();
     if (currentView === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); }
+    loadAccesoUI(); renderGate();
     if (nowAdmin && !wasAdmin) { startAdminWatchers(); refreshMode({ keepView: true }); }
     else if (!nowAdmin && wasAdmin) { stopWatchers(['allbk', 'allst', 'allses']); allBookings = []; allStations = []; allSessions = []; refreshMode({ keepView: true }); }
     else if (nowAdmin) { if (currentView === 'panel') renderPanel(); if (currentView === 'usuarios') renderUsers(); }
@@ -487,6 +491,7 @@
           <div class="sc-badges">
             <span class="sc-badge b-torre">🏢 Torre ${escapeHtml(sp.torre || '—')}</span>
             <span class="sc-badge ${open ? 'b-ok' : 'b-off'}">${open ? '● Disponible ahora' : '○ Cerrado ahora'}</span>
+            ${sp.ownerVerificado ? '<span class="sc-badge b-ver">✓ Vecino verificado</span>' : ''}
             ${mine ? '<span class="sc-badge b-mine">★ Tu puesto</span>' : ''}
           </div>
         </div>
@@ -510,6 +515,143 @@
       li.querySelector('.sc-chat').addEventListener('click', (e) => { e.stopPropagation(); startChatWith(sp); });
     }
     return li;
+  }
+
+  /* =========================================================
+     Horas apartadas
+     Una reserva bloquea sus cuartos de hora menos el último medio: así el
+     siguiente vecino puede llegar mientras el anterior desconecta (hasta 15
+     minutos de relevo), pero un cruce mayor no pasa.
+     ========================================================= */
+  const slotCache = new Map();
+  async function slotsDe(stationId, fecha) {
+    if (!VB || !stationId || !fecha) return [];
+    const k = VB.sfKey(stationId, fecha);
+    if (slotCache.has(k)) return slotCache.get(k);
+    const list = await VB.busySlots(stationId, fecha).catch(() => []);
+    slotCache.set(k, list);
+    setTimeout(() => slotCache.delete(k), 30000); // que no se quede viejo
+    return list;
+  }
+  async function horasChocan(stationId, fecha, from, to) {
+    const ocupados = await slotsDe(stationId, fecha);
+    if (!ocupados.length) return false;
+    const mios = new Set(VB.slotKeys(fecha, from, to));
+    // Las horas que uno mismo ya tenía apartadas no cuentan como choque ajeno.
+    return ocupados.some((s) => mios.has(s.hhmm) && s.driverUid !== (VB.uid() || ''));
+  }
+  const hhmmLabel = (h) => h.slice(0, 2) + ':' + h.slice(2);
+  /* Pinta bajo el formulario las horas que ya están tomadas ese día. */
+  async function pintarOcupadas(sp) {
+    const box = $('#bkBusy');
+    if (!box) return;
+    const fecha = $('#bkFecha') && $('#bkFecha').value;
+    if (!fecha) { box.classList.add('hidden'); return; }
+    slotCache.delete(VB.sfKey(sp.id, fecha));
+    const ocupados = await slotsDe(sp.id, fecha);
+    const ajenos = ocupados.filter((s) => s.driverUid !== (VB.uid() || ''));
+    if (!ajenos.length) {
+      box.className = 'bk-busy bk-busy-free';
+      box.innerHTML = '✅ Ese día el puesto está libre a cualquier hora del horario del anfitrión.';
+      box.classList.remove('hidden');
+      return;
+    }
+    // Agrupamos los cuartos seguidos en rangos legibles.
+    const mins = ajenos.map((s) => +s.hhmm.slice(0, 2) * 60 + +s.hhmm.slice(2)).sort((a, b) => a - b);
+    const rangos = [];
+    let ini = mins[0], prev = mins[0];
+    for (let i = 1; i <= mins.length; i++) {
+      if (i === mins.length || mins[i] > prev + 15) { rangos.push([ini, prev + 30]); ini = mins[i]; }
+      prev = mins[i];
+    }
+    const fmt = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    box.className = 'bk-busy';
+    box.innerHTML = '🚫 Ya apartado ese día: ' + rangos.map((r) => `<b>${fmt(r[0])}–${fmt(r[1])}</b>`).join(', ') +
+      '<small>Puedes empezar justo cuando otro termina: dejamos 15 minutos de relevo.</small>';
+    box.classList.remove('hidden');
+  }
+  /* Al cancelar o declinar, la hora vuelve a quedar libre para el resto. */
+  async function liberarHoras(bk) {
+    if (!bk || !VB) return;
+    try { await VB.releaseSlots(bk); slotCache.delete(VB.sfKey(bk.stationId, bk.fecha)); } catch (e) {}
+  }
+
+  /* =========================================================
+     Código del conjunto
+     Sin él la app se puede mirar, pero no reservar ni publicar.
+     ========================================================= */
+  const esVecino = () => isAdmin() || !!(myProfile && myProfile.verificado === true);
+  function puedeActuar(accion) {
+    if (!user) { needLogin(); return false; }
+    if (esVecino()) return true;
+    toast('Para ' + (accion || 'usar esto') + ' necesitas el código del conjunto', 'error');
+    goView('settings');
+    setTimeout(() => { const el = $('#acCodigo'); if (el) el.focus(); }, 400);
+    return false;
+  }
+  function renderGate() {
+    const pendiente = !!user && !esVecino();
+    ['#gateBuscar', '#gateNov'].forEach((s) => {
+      const el = $(s); if (!el) return;
+      el.classList.toggle('hidden', !pendiente);
+      if (pendiente) {
+        el.innerHTML = '<div><b>🔐 Te falta el código del conjunto</b><span>Puedes mirar la app, pero para reservar o publicar tu puesto necesitas el código que reparte la administración.</span></div>' +
+          '<button class="btn-secondary btn-sm" type="button" data-gate="1">Escribir código</button>';
+        const b = el.querySelector('[data-gate]');
+        if (b) b.addEventListener('click', () => { goView('settings'); setTimeout(() => { const i = $('#acCodigo'); if (i) i.focus(); }, 400); });
+      }
+    });
+  }
+  function loadAccesoUI() {
+    const card = $('#accesoCard'); if (!card) return;
+    const soloAdmin = effectiveMode() === 'admin';
+    card.classList.toggle('hidden', !user || soloAdmin);
+    const ok = esVecino();
+    $('#accesoBadge').classList.toggle('hidden', !ok);
+    $('#accesoOk').classList.toggle('hidden', !ok);
+    $('#accesoPendiente').classList.toggle('hidden', ok);
+  }
+  async function enviarCodigo() {
+    const inp = $('#acCodigo'), err = $('#acError');
+    err.classList.add('hidden');
+    const val = (inp.value || '').trim();
+    if (!val) { err.textContent = 'Escribe el código.'; err.classList.remove('hidden'); return; }
+    try {
+      $('#acSave').disabled = true;
+      await VB.verificarCodigo(val);
+      successPop();
+      toast('¡Listo! Ya eres vecino verificado ✓');
+      inp.value = '';
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove('hidden');
+    } finally { $('#acSave').disabled = false; }
+  }
+
+  /* =========================================================
+     Recordatorio del día
+     ========================================================= */
+  function renderTodayBanner() {
+    const hoy = ymd(new Date());
+    const pinta = (sel, lista, texto) => {
+      const el = $(sel); if (!el) return;
+      const hoyList = lista.filter((b) => b.fecha === hoy && (b.estado === 'confirmada' || b.estado === 'completada'));
+      el.classList.toggle('hidden', !hoyList.length);
+      if (!hoyList.length) return;
+      hoyList.sort((a, b) => hToMin(a.from) - hToMin(b.from));
+      el.innerHTML = '<span class="today-ico">📅</span><div>' + texto(hoyList) + '</div>';
+    };
+    pinta('#todayRes', myBookings, (l) => {
+      const b = l[0];
+      return '<b>Hoy cargas a las ' + escapeHtml(b.from) + '</b><span>' + escapeHtml(b.stationName || 'Tu puesto') +
+        ' · Torre ' + escapeHtml(b.torre || '—') + ' · puesto ' + escapeHtml(b.numeroParqueadero || 'por coordinar') +
+        (l.length > 1 ? ' · y ' + (l.length - 1) + ' más hoy' : '') + '</span>';
+    });
+    pinta('#todayNov', myRequests, (l) => {
+      const b = l[0];
+      return '<b>Hoy recibes a ' + escapeHtml((b.driverName || 'un vecino').split(' ')[0]) + ' a las ' + escapeHtml(b.from) + '</b>' +
+        '<span>' + (l.length > 1 ? l.length + ' cargas agendadas para hoy en tu puesto' : 'Ten a mano la lectura del contador antes de conectar') + '</span>';
+    });
   }
 
   /* =========================================================
@@ -546,6 +688,7 @@
         <div class="field"><label>Desde</label><div class="input-wrap"><input id="bkFrom" type="time" value="${defFrom}"/></div></div>
         <div class="field"><label>Hasta</label><div class="input-wrap"><input id="bkTo" type="time" value="${sp.hasta || '20:00'}"/></div></div>
       </div>
+      <div class="bk-busy hidden" id="bkBusy"></div>
       <div class="sh-est"><span>Costo estimado</span><b id="bkEst">${fmtCOP(20 * (sp.precio || 0))}</b></div>
       <button id="bkSend" class="btn-primary" type="button" style="margin-top:14px"><span class="btn-glow"></span>Enviar solicitud de reserva</button>
       <button id="bkChat" class="btn-ghost btn-block" type="button" style="margin-top:10px">💬 Prefiero preguntarle primero</button>
@@ -555,6 +698,8 @@
     $('#bkKwh').addEventListener('input', est);
     $('#bkSend').addEventListener('click', () => submitBooking(sp));
     $('#bkChat').addEventListener('click', () => startChatWith(sp));
+    $('#bkFecha').addEventListener('change', () => pintarOcupadas(sp));
+    pintarOcupadas(sp);
   }
   async function submitBooking(sp) {
     const fecha = $('#bkFecha').value, from = $('#bkFrom').value, to = $('#bkTo').value;
@@ -564,6 +709,10 @@
     const wd = parseYmd(fecha).getDay(), dias = sp.dias || [1, 1, 1, 1, 1, 1, 1];
     if (!dias[wd]) { toast('Ese día el puesto no está disponible', 'error'); return; }
     if (hToMin(from) < hToMin(sp.desde) || hToMin(to) > hToMin(sp.hasta)) { toast('Elige un horario entre ' + sp.desde + ' y ' + sp.hasta, 'error'); return; }
+    if (!puedeActuar('reservar')) return;
+    // Aviso temprano y amable; el bloqueo de verdad lo hace Firestore más abajo.
+    const choque = await horasChocan(sp.id, fecha, from, to);
+    if (choque) { toast('Esa hora ya está apartada por otro vecino. Mira las horas libres arriba.', 'error'); await pintarOcupadas(sp); return; }
     const common = !!(sp.common || sp.autoConfirm); // puestos de la administración: sin aprobación
     try {
       $('#bkSend').disabled = true;
@@ -573,7 +722,24 @@
         precio: sp.precio || 0, fecha, from, to, kwhEst, total: kwhEst * (sp.precio || 0), demo: !!sp.demo, common
       };
       if (common) { bk.estado = 'confirmada'; bk.numeroParqueadero = sp.numeroParqueadero || ''; }
-      const id = await VB.createBooking(bk);
+      // Primero se apartan las horas: si otro vecino ganó la carrera, el lote
+      // falla entero y no llegamos a crear una reserva imposible de cumplir.
+      try {
+        await VB.claimSlots(bk, '');
+      } catch (e) {
+        $('#bkSend').disabled = false;
+        toast('Justo alguien apartó esa hora. Elige otra franja.', 'error');
+        await pintarOcupadas(sp);
+        return;
+      }
+      let id;
+      try {
+        id = await VB.createBooking(bk);
+      } catch (e) {
+        await VB.releaseSlots(bk); // no dejamos horas bloqueadas sin reserva detrás
+        throw e;
+      }
+      slotCache.delete(VB.sfKey(sp.id, fecha));
       closeSheet('#spotSheet');
       goView('reservas');
       successPop();
@@ -728,6 +894,7 @@
   const PILL = { pendiente: ['p-pend', 'Por confirmar'], confirmada: ['p-ok', 'Confirmada'], rechazada: ['p-no', 'Declinada'], cancelada: ['p-dim', 'Cancelada'], completada: ['p-dim', 'Completada'] };
   function renderReservas() {
     if (!user) return;
+    renderTodayBanner();
     renderCalendar('#calDriver', myBookings, 'driver');
     const ul = $('#bookList'); ul.innerHTML = '';
     $('#bookEmpty').classList.toggle('hidden', myBookings.length > 0);
@@ -742,7 +909,7 @@
         ${bk.estado === 'rechazada' && bk.rejectReason ? `<div class="bk-pay p-rej">✋ Motivo: ${escapeHtml(bk.rejectReason)}</div>` : ''}
         <div class="bk-actions">
           <button class="btn-ghost btn-sm" data-chat="${bk.id}">💬 Chat</button>
-          ${bk.estado === 'pendiente' ? `<button class="btn-ghost btn-sm btn-danger" data-cancel="${bk.id}">Cancelar</button>` : ''}
+          ${(bk.estado === 'pendiente' || bk.estado === 'confirmada') ? `<button class="btn-ghost btn-sm btn-danger" data-cancel="${bk.id}">Cancelar</button>` : ''}
           ${(bk.estado === 'confirmada' || bk.estado === 'completada') && !bk.ratedByDriver ? `<button class="btn-ok" data-rate="${bk.id}">⭐ Calificar</button>` : ''}
           ${bk.ratedByDriver ? '<span class="sc-badge b-ok">✓ Calificado</span>' : ''}
         </div>`;
@@ -750,7 +917,7 @@
       seen.reqs.push('b_' + bk.id + '_' + bk.estado);
     });
     persistSeen();
-    $$('#bookList [data-cancel]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.cancel, { estado: 'cancelada' }).then(() => toast('Reserva cancelada'))));
+    $$('#bookList [data-cancel]').forEach((b) => b.addEventListener('click', () => cancelarReserva(b.dataset.cancel)));
     $$('#bookList [data-copy]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Llave copiada 📋'); } catch (e) {} }));
     $$('#bookList [data-wompi]').forEach((b) => b.addEventListener('click', () => payWithWompi(b.dataset.wompi)));
     $$('#bookList [data-qr]').forEach((b) => b.addEventListener('click', () => {
@@ -762,12 +929,28 @@
     $$('#bookList [data-chat]').forEach((b) => b.addEventListener('click', () => { const bk = myBookings.find((x) => x.id === b.dataset.chat); if (bk) startChatWith({ id: bk.stationId, nombre: bk.stationName, ownerUid: bk.ownerUid, ownerName: bk.ownerName, demo: bk.demo }); }));
   }
 
+  /* Cancelar libera la hora: si el vecino ya no va, otro puede tomarla. */
+  async function cancelarReserva(id) {
+    const bk = myBookings.find((x) => x.id === id);
+    if (!bk) return;
+    if (bk.estado === 'confirmada' && !confirm('¿Cancelar esta reserva ya confirmada?\n\nLa hora queda libre para otro vecino y le avisamos al anfitrión.')) return;
+    if (bk.pagado || bk.wompiTxId) {
+      if (!confirm('Ojo: esta reserva ya tiene un pago registrado.\n\nCancélala solo si acordaste la devolución con el anfitrión. ¿Sigo?')) return;
+    }
+    try {
+      await VB.updateBooking(id, { estado: 'cancelada' });
+      await liberarHoras(bk);
+      toast('Reserva cancelada · la hora quedó libre');
+    } catch (e) { toast('No se pudo cancelar', 'error'); }
+  }
+
   /* =========================================================
      Novedades + solicitudes (host)
      ========================================================= */
   function renderNovedades() {
     if (!user) { renderAuthUI(); return; }
     refreshNotifBanner();
+    renderTodayBanner();
     autoVerifyWompiPayments();
     const pend = myRequests.filter((r) => r.estado === 'pendiente');
     const porCobrar = myRequests.filter((r) => (r.estado === 'confirmada' || r.estado === 'completada') && !r.pagado);
@@ -947,7 +1130,7 @@
     }
   }
   async function savePuesto() {
-    if (!user) { needLogin(); return; }
+    if (!puedeActuar('publicar tu puesto')) return;
     const nombre = $('#spName').value.trim();
     if (!nombre) { toast('Ponle un nombre a tu puesto', 'error'); return; }
     const wompiOn = $('#spWompiOn').classList.contains('is-on');
@@ -963,7 +1146,7 @@
     }
     const data = {
       conjunto: CONJUNTO, nombre, torre: $('#spTorre').value.trim(), numeroParqueadero: $('#spNum').value.trim(),
-      wompi: wompiOn,
+      wompi: wompiOn, ownerVerificado: esVecino(),
       tamano: $('#spSize').value, puerto: $('#spPort').value, pow: parseFloat($('#spPow').value),
       condiciones: $('#spCond').value.trim(),
       precio: Math.max(0, Math.round(parseNum($('#spPrecio').value))) || settings.pricePerKwh,
@@ -1001,8 +1184,12 @@
     let reason = rejReason;
     if (reason === 'otro') { reason = $('#rejOther').value.trim(); if (!reason) { toast('Escribe el motivo', 'error'); return; } }
     if (!reason) { toast('Elige un motivo', 'error'); return; }
-    try { await VB.updateBooking(rejectCtx, { estado: 'rechazada', rejectReason: reason }); closeSheet('#rejectSheet'); toast('Solicitud declinada'); }
-    catch (e) { toast('Error al declinar', 'error'); }
+    const rq = myRequests.find((x) => x.id === rejectCtx);
+    try {
+      await VB.updateBooking(rejectCtx, { estado: 'rechazada', rejectReason: reason });
+      await liberarHoras(rq); // la hora vuelve al conjunto
+      closeSheet('#rejectSheet'); toast('Solicitud declinada · la hora quedó libre');
+    } catch (e) { toast('Error al declinar', 'error'); }
   }
 
   /* =========================================================
@@ -1527,9 +1714,15 @@
         <div class="user-detail-grid">
           <div class="udg"><span>📱 Celular</span><b>${escapeHtml(u.phone || '—')}</b></div>
           <div class="udg"><span>🏢 Ubicación</span><b>${escapeHtml(loc)}</b></div>
-          <div class="udg"><span>✉️ Verificado</span><b>${u.emailVerified ? 'Sí' : 'No'}</b></div>
+          <div class="udg"><span>✉️ Correo</span><b>${u.emailVerified ? 'Verificado' : 'Sin verificar'}</b></div>
           <div class="udg"><span>🔑 Rol actual</span><b>${u.role === 'admin' ? 'Administrador' : 'Residente'}</b></div>
         </div>
+        <h3 class="sub-h" style="margin-top:16px">Acceso al conjunto</h3>
+        <div class="switch-row" style="margin-top:0">
+          <div><span class="switch-title">${u.verificado ? '✓ Vecino verificado' : 'Sin el código del conjunto'}</span><span class="switch-sub">${u.verificado ? 'Puede reservar y publicar su puesto' : 'Solo puede mirar la app'}</span></div>
+          <button id="urVerif" class="switch ${u.verificado ? 'is-on' : ''}" type="button" role="switch" aria-checked="${!!u.verificado}"><i></i></button>
+        </div>
+        <p class="hint">Actívalo a mano si el vecino es de MontReal pero no tiene el código a la mano.</p>
         <h3 class="sub-h" style="margin-top:16px">Rol en el conjunto</h3>
         <div class="segmented" id="urRole">
           <button class="seg-btn ${u.role !== 'admin' ? 'is-active' : ''}" data-role="guest" type="button">🏠 Residente</button>
@@ -1541,6 +1734,13 @@
       </div>`;
     openSheet('#userSheet');
     $$('#urRole .seg-btn').forEach((b) => b.addEventListener('click', () => { chosen = b.dataset.role; $$('#urRole .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b)); }));
+    $('#urVerif').addEventListener('click', () => {
+      const sw = $('#urVerif'), nuevo = !sw.classList.contains('is-on');
+      sw.classList.toggle('is-on', nuevo); sw.setAttribute('aria-checked', String(nuevo));
+      VB.setUserVerified(u.uid, nuevo)
+        .then(() => { u.verificado = nuevo; toast(nuevo ? 'Vecino verificado ✓' : 'Acceso retirado'); })
+        .catch(() => { sw.classList.toggle('is-on', !nuevo); toast('No se pudo cambiar el acceso', 'error'); });
+    });
     $('#urSave').addEventListener('click', () => changeUserRole(u, chosen));
     $('#userSheetContent [data-close]').addEventListener('click', () => closeSheet('#userSheet'));
   }
@@ -2151,8 +2351,10 @@
       refreshMode();
     });
 
-    // Perfil del residente
+    // Perfil del residente y código del conjunto
     $('#pfSave').addEventListener('click', saveProfileHandler);
+    $('#acSave').addEventListener('click', enviarCodigo);
+    $('#acCodigo').addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarCodigo(); });
 
     // QR de pago (formulario del anfitrión)
     $('#spQrPick').addEventListener('click', () => $('#spQrInput').click());
