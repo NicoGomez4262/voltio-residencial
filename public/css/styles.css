@@ -415,17 +415,27 @@ textarea {
 
 /* Consola de carga */
 .charge-console {
-  display: flex; align-items: stretch; justify-content: center; gap: 12px;
-  margin: 0 auto 14px; padding: 13px 18px; max-width: 440px;
+  display: flex; align-items: stretch; justify-content: center; gap: 10px;
+  margin: 0 auto 14px; padding: 13px 14px; max-width: 440px; width: 100%;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-sizing: border-box; overflow: hidden;
 }
-.cc-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 84px; }
+.cc-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; flex: 1 1 0; }
 .cc-label { font-size: 9.5px; color: var(--text-mute); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
 .cc-num { font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cc-num i { font-style: normal; font-family: "Exo 2", sans-serif; font-size: 11px; color: var(--text-mute); font-weight: 600; }
-.cc-div { width: 1px; background: var(--border); }
-.cc-status { flex-direction: row; gap: 8px; min-width: 108px; }
-.cc-status span:last-child { font-size: 12px; font-weight: 600; color: var(--text-mute); }
+.cc-div { width: 1px; background: var(--border); flex: none; }
+.cc-status { flex-direction: row; gap: 7px; flex: 1 1 auto; }
+.cc-status span:last-child {
+  font-size: 12px; font-weight: 600; color: var(--text-mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+/* En celulares angostos el estado se lee igual, solo con menos aire */
+@media (max-width: 380px) {
+  .charge-console { gap: 7px; padding: 11px 10px; }
+  .cc-num { font-size: 14px; }
+  .cc-status span:last-child { font-size: 11px; }
+}
 .cc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-mute); flex-shrink: 0; transition: background 0.3s; }
 .charge-console.is-charging .cc-dot { background: var(--accent); animation: softPulse 1s ease-in-out infinite; }
 .charge-console.is-charging .cc-status span:last-child { color: var(--accent); }
@@ -1209,6 +1219,54 @@ button { -webkit-tap-highlight-color: transparent; }
 .today-ico { flex: none; font-size: 20px; }
 .today-banner b { display: block; font-size: 13.5px; color: var(--text); }
 .today-banner span { display: block; margin-top: 3px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
+/* =========================================================
+   v2.7 — Estimador de energía, aviso central y formato del recibo
+   ========================================================= */
+.kwh-box {
+  margin-top: 12px; padding: 16px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid rgba(var(--accent-rgb), 0.25);
+}
+.kwh-auto { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
+.kwh-auto b { font-family: var(--font-display); font-size: 30px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.kwh-auto span { font-size: 13px; color: var(--text-dim); }
+.kwh-box .hint { text-align: center; margin-top: 8px; }
+.bk-est-nota { margin-top: 8px; }
+
+/* Aviso grande en el centro de la pantalla */
+.aviso-centro {
+  position: fixed; inset: 0; z-index: 320; display: grid; place-items: center;
+  padding: 24px; background: rgba(8,10,15,0.72); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  animation: avisoIn 0.28s cubic-bezier(.2,.8,.3,1);
+}
+.aviso-centro.is-out { animation: avisoOut 0.3s ease forwards; }
+.aviso-caja {
+  width: 100%; max-width: 340px; text-align: center; padding: 28px 24px;
+  border-radius: var(--radius); background: var(--surface);
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.9), 0 0 0 6px rgba(var(--accent-rgb), 0.06);
+}
+.aviso-ico {
+  display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 14px;
+  border-radius: 50%; font-size: 26px; background: rgba(var(--accent-rgb), 0.14);
+  color: var(--accent); animation: avisoPop 0.5s cubic-bezier(.2,.8,.3,1.4);
+}
+.aviso-ok .aviso-ico { background: var(--accent); color: var(--on-accent); font-weight: 800; }
+.aviso-caja b { display: block; font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+.aviso-caja p { margin-top: 8px; font-size: 13.5px; color: var(--text-dim); line-height: 1.55; }
+.aviso-caja p small { display: block; margin-top: 6px; font-size: 12px; color: var(--text-mute); }
+.aviso-pill {
+  display: inline-block; margin-top: 14px; padding: 7px 14px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; color: var(--warn);
+  background: rgba(232,196,106,0.12); border: 1px solid rgba(232,196,106,0.3);
+}
+@keyframes avisoIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes avisoOut { to { opacity: 0; } }
+@keyframes avisoPop { 0% { transform: scale(0); } 60% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+/* Formato del recibo al compartir */
+.share-format { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; padding: 4px; background: var(--surface-2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.share-format .seg-btn { font-size: 12.5px; padding: 9px 4px; }
 
 /* Sin selector de vehículo (administración), el color no necesita separación extra */
 #vehBlock:not(.hidden) + #accentLabel { margin-top: 16px; }

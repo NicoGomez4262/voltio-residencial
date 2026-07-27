@@ -10,7 +10,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Exo+2:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="/css/styles.css?v=2.6.0" />
+<link rel="stylesheet" href="/css/styles.css?v=2.7.0" />
+<script defer src="/js/recibo.js?v=2.7.0"></script>
 <style>
   .diag { max-width: 620px; margin: 0 auto; padding: 22px 16px 60px; }
   .diag h1 { font-family: var(--font-display); font-size: 22px; margin-bottom: 6px; }
@@ -207,6 +208,47 @@ $('#btnRun').addEventListener('click', async () => {
     slotKeys('11:45', '13:00').forEach((h) => b.delete(doc(db, 'slots', sid(h))));
     await b.commit();
   } catch (e) {}
+
+  // --- Estimador de energía ---
+  const horasUtiles = (from, to) => {
+    const min = (h) => { const p = String(h).split(':'); return (+p[0]) * 60 + (+p[1]); };
+    const d = (min(to) - min(from)) / 60;
+    return d <= 0 ? 0 : Math.max(d * 0.5, d - 1);
+  };
+  const kwhCalc = (pow, from, to) => Math.round(Math.min(pow * horasUtiles(from, to), 60) * 10) / 10;
+  await debeFuncionar('El estimado de energía da números creíbles', async () => {
+    const casos = [
+      [7.4, '18:00', '23:00', 29.6],   // noche típica
+      [7.4, '08:00', '10:00', 7.4],    // dos horas
+      [7.4, '08:00', '20:00', 60],     // jornada larga: topada al máximo de una batería
+      [22, '08:00', '12:00', 60]       // carga rápida: también topada
+    ];
+    const malos = casos.filter(([p, f, t, esp]) => Math.abs(kwhCalc(p, f, t) - esp) > 0.05);
+    if (malos.length) throw new Error('cálculo inesperado en ' + malos.length + ' caso(s)');
+    return true;
+  }, 'Una noche de 5 h a 7,4 kW estima 29,6 kWh; una reserva larguísima se topa en 60 kWh para no asustar con un número irreal.');
+
+  // --- Recibo compartible ---
+  if (window.VRecibo) {
+    const calcDemo = {
+      dateISO: new Date().toISOString(), kwh: 32.5, pricePerKwh: 1000, subtotal: 32500, total: 32500,
+      serviceFee: 0, discount: 0, readingStart: 100, readingEnd: 132.5,
+      kmAdded: 195, co2: 37.5, savings: 35400, driverName: 'Vecino de prueba', stationName: 'Puesto de prueba'
+    };
+    await debeFuncionar('El recibo se genera como imagen', async () => {
+      const b = await window.VRecibo.toImagen(calcDemo, {});
+      if (b.size < 20000) throw new Error('la imagen salió vacía');
+      return b;
+    }, 'Listo para compartir por WhatsApp, pesando poco.');
+    await debeFuncionar('El recibo se genera como PDF', async () => {
+      const b = await window.VRecibo.toPDF(calcDemo, {});
+      const cab = await b.slice(0, 8).text();
+      if (cab.indexOf('%PDF') !== 0) throw new Error('el PDF salió mal formado');
+      return b;
+    }, 'Archivo PDF válido, con la misma composición de la imagen.');
+  } else {
+    fila('info', 'Recibo compartible', 'El módulo no está cargado en esta página; pruébalo desde la app.');
+  }
 
   // --- Pagos ---
   await debeFuncionar('La firma de Wompi se calcula bien', async () => {

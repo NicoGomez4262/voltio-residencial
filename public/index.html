@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Exo+2:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="/css/styles.css?v=2.6.0" />
+  <link rel="stylesheet" href="/css/styles.css?v=2.7.0" />
 </head>
 <body data-accent="cyan">
   <div class="bg" aria-hidden="true">
@@ -233,12 +233,13 @@
           </div>
           <div id="puestoForm" class="hidden">
             <div class="grid-2">
-              <div class="field"><label for="spName">Nombre del puesto</label><div class="input-wrap"><input id="spName" type="text" placeholder="Ej: Torre 3 · Cubierto" autocomplete="off"/></div></div>
+              <div class="field"><label for="spName">Nombre del puesto</label><div class="input-wrap"><input id="spName" type="text" placeholder="Ej: Puesto de Carlos" autocomplete="off"/></div></div>
               <div class="field"><label for="spTorre">Torre</label><div class="input-wrap select-wrap"><select id="spTorre"><option value="">Selecciona…</option></select></div></div>
               <div class="field"><label for="spNum">Número de parqueadero</label><div class="input-wrap"><input id="spNum" type="text" placeholder="Ej: P-124" autocomplete="off"/></div></div>
               <div class="field"><label for="spSize">Tamaño</label><div class="input-wrap select-wrap"><select id="spSize"><option>Pequeño</option><option selected>Mediano</option><option>Grande</option></select></div></div>
               <div class="field"><label for="spPort">Tipo de puerto</label><div class="input-wrap select-wrap"><select id="spPort"><option>Tipo 1</option><option selected>Tipo 2</option><option>CCS</option><option>Doméstico</option></select></div></div>
-              <div class="field"><label for="spPow">Potencia</label><div class="input-wrap select-wrap"><select id="spPow"><option value="3.6">3,6 kW (doméstico)</option><option value="7.4" selected>7,4 kW</option><option value="11">11 kW</option><option value="22">22 kW</option></select></div></div>
+              <div class="field"><label for="spPow">Potencia</label><div class="input-wrap select-wrap"><select id="spPow"><option value="3.6">3,6 kW (doméstico)</option><option value="7.4" selected>7,4 kW</option><option value="11">11 kW</option><option value="22">22 kW</option><option value="otra">Otra…</option></select></div></div>
+              <div class="field hidden" id="spPowOtraField"><label for="spPowOtra">¿Cuánta potencia da tu cargador?</label><div class="input-wrap"><input id="spPowOtra" inputmode="decimal" placeholder="Ej: 9,6" autocomplete="off"/><span class="unit">kW</span></div><p class="hint" style="margin-top:6px">Está en la etiqueta del cargador o en su manual. Si solo ves amperios: multiplícalos por 220 y divide entre 1.000.</p></div>
             </div>
             <p class="hint" style="margin-top:2px">🔒 El número del parqueadero solo se le muestra al vecino cuando confirmas su reserva.</p>
 
@@ -267,10 +268,8 @@
 
             <div class="pay-method">
               <div class="pay-method-head"><span class="pay-ico">⚡</span><div><b>Bre-B · transferencia inmediata</b><small>El vecino te transfiere desde su banco. Sin comisión. Tú confirmas cuando llega.</small></div></div>
-            <div class="grid-2">
-              <div class="field"><label for="spBreb">Llave Bre-B</label><div class="input-wrap"><input id="spBreb" type="text" placeholder="@usuario, celular, correo…" autocomplete="off"/></div></div>
-              <div class="field"><label for="spTitular">Nombre del titular</label><div class="input-wrap"><input id="spTitular" type="text" placeholder="Como aparece en el banco" autocomplete="off"/></div></div>
-            </div>
+            <div class="field"><label for="spBreb">Llave Bre-B</label><div class="input-wrap"><input id="spBreb" type="text" placeholder="@usuario, celular, correo…" autocomplete="off"/></div></div>
+            <div class="field"><label for="spTitular">Nombre del titular</label><div class="input-wrap"><input id="spTitular" type="text" placeholder="Como aparece en el banco" autocomplete="off"/></div></div>
             <div class="field"><label for="spBanco">Banco o billetera</label><div class="input-wrap select-wrap"><select id="spBanco">
               <option value="">Selecciona…</option>
               <option>Bancolombia</option><option>Nequi</option><option>Daviplata</option><option>Davivienda</option>
@@ -279,7 +278,8 @@
               <option>Banco de Occidente</option><option>Bancoomeva</option><option>Movii</option><option>Otro</option>
             </select></div></div>
             <div class="field ta-field">
-              <label>Código QR de pago <span class="opt">(opcional — se lo mostramos al vecino)</span></label>
+              <label>Código QR de pago <span class="opt">(opcional)</span></label>
+              <p class="hint" style="margin:0 0 10px">No es obligatorio: con la llave Bre-B basta. Súbelo solo si prefieres que el vecino pague escaneando.</p>
               <input id="spQrInput" type="file" accept="image/*" class="hidden"/>
               <div class="qr-preview hidden" id="spQrPreview"><img id="spQrImg" alt="QR de pago"/><button type="button" class="qr-remove" id="spQrRemove">✕ Quitar QR</button></div>
               <button type="button" class="qr-drop" id="spQrPick"><span class="qr-ico">📷</span><span class="qr-drop-main">Subir imagen del QR</span><small>Bre-B, Nequi, Daviplata… La comprimimos por ti.</small></button>
@@ -426,6 +426,12 @@
               <span class="acc-avatar" id="accAvatar">N</span>
               <div class="acc-info"><div class="acc-name" id="accName">—</div><div class="acc-email" id="accEmail">—</div><div class="sc-badges" id="accBadges" style="margin-top:7px"></div></div>
             </div>
+            <div class="field" style="margin-top:16px">
+              <label for="acNombre">Cómo te ven tus vecinos</label>
+              <div class="input-wrap"><input id="acNombre" type="text" placeholder="Tu nombre" autocomplete="name" maxlength="40"/></div>
+              <p class="hint">Este es el nombre que aparece en tus reservas, en el chat, en los recibos y en tu puesto publicado. Empieza con el de tu correo, pero puedes poner el que prefieras.</p>
+            </div>
+            <button id="acNombreSave" class="btn-secondary btn-block" type="button">Guardar mi nombre</button>
             <button id="accLogout" class="btn-ghost btn-block btn-danger" type="button" style="margin-top:14px">Cerrar sesión</button>
           </div>
         </div>
@@ -529,7 +535,7 @@
           <div class="data-actions"><button id="exportBtn2" class="btn-ghost" type="button">Exportar recibos (CSV)</button><button id="resetBtn" class="btn-ghost btn-danger" type="button">Restablecer datos locales</button></div>
         </div>
 
-        <p class="version">Voltio Residencial v2.6.0 · Piloto conjunto MontReal ⚡</p>
+        <p class="version">Voltio Residencial v2.7.0 · Piloto conjunto MontReal ⚡</p>
       </section>
 
       <!-- ============ ADMIN: PANEL ============ -->
@@ -629,7 +635,7 @@
         <div class="lg-div"><span>o con tu correo</span></div>
         <div class="field hidden" id="lgNameField"><div class="input-wrap"><input id="lgName" type="text" placeholder="Tu nombre" autocomplete="name"/></div></div>
         <div class="field"><div class="input-wrap"><input id="lgEmail" type="email" placeholder="Correo electrónico" autocomplete="email"/></div></div>
-        <div class="field"><div class="input-wrap"><input id="lgPass" type="password" placeholder="Contraseña" autocomplete="current-password"/></div></div>
+        <div class="field"><div class="input-wrap"><input id="lgPass" type="password" placeholder="Ej: PASSWORD123" autocomplete="current-password"/></div></div>
         <p id="lgError" class="form-error hidden"></p>
         <button id="lgSubmit" class="btn-secondary btn-block" type="button">Entrar</button>
         <button id="lgToggle" class="lg-toggle" type="button">¿No tienes cuenta? <b>Crear una</b></button>
@@ -789,6 +795,11 @@
         <div class="result-grid"><div class="rstat"><span class="rstat-ico">🔋</span><b id="rKm">0 km</b><small>autonomía</small></div><div class="rstat"><span class="rstat-ico">🌱</span><b id="rCo2">0 kg</b><small>CO₂ evitado</small></div><div class="rstat"><span class="rstat-ico">💵</span><b id="rSave">$0</b><small>ahorro vs gasolina</small></div></div>
         <div class="result-breakdown" id="rBreakdown"></div>
         <div class="result-actions">
+          <div class="share-format" id="shareFormat" role="group" aria-label="Formato del recibo">
+            <button class="seg-btn is-active" data-fmt="img" type="button">🖼️ Imagen</button>
+            <button class="seg-btn" data-fmt="pdf" type="button">📄 PDF</button>
+            <button class="seg-btn" data-fmt="txt" type="button">💬 Texto</button>
+          </div>
           <button id="shareBtn" class="btn-primary btn-share" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>Compartir recibo</button>
           <button id="newBtn" class="btn-secondary" type="button">Nueva carga</button>
           <p class="autosave-note">✓ Guardada automáticamente en tu historial</p>
@@ -874,10 +885,11 @@
     </defs>
   </svg>
 
-  <script type="module" src="/js/backend.js?v=2.6.0"></script>
-  <script defer src="/js/reporte.js?v=2.6.0"></script>
-  <script defer src="/js/wompi.js?v=2.6.0"></script>
-  <script defer src="/js/ocr.js?v=2.6.0"></script>
-  <script defer src="/js/app.js?v=2.6.0"></script>
+  <script type="module" src="/js/backend.js?v=2.7.0"></script>
+  <script defer src="/js/reporte.js?v=2.7.0"></script>
+  <script defer src="/js/wompi.js?v=2.7.0"></script>
+  <script defer src="/js/recibo.js?v=2.7.0"></script>
+  <script defer src="/js/ocr.js?v=2.7.0"></script>
+  <script defer src="/js/app.js?v=2.7.0"></script>
 </body>
 </html>

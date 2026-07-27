@@ -1,108 +1,169 @@
 # 06 · Fondo de la aplicación
 
-> Lee antes `00-GUIA-GENERAL.md`.
+> **Cambio de enfoque:** este archivo ya no pide una ilustración vectorial, sino **una
+> imagen atmosférica fotorrealista/pictórica generada por IA**, más una animación descrita
+> aparte — pero, a diferencia de los carros, aquí la recomendación es **no** usar una IA
+> de video. Se explica por qué más abajo. `05, 07, 08, 09, 10` siguen con el método
+> vectorial anterior hasta que se rehagan.
 
-## Por qué
+## Por qué y la regla más estricta de toda la carpeta
 
-Hoy el fondo es una rejilla estática y un resplandor fijo. Está bien, pero es donde
-**menos esfuerzo cuesta y más se gana**: un fondo con un movimiento casi imperceptible
-hace que toda la app se sienta viva sin robarle atención a nada.
+Es el fondo detrás de **cada pantalla, todo el tiempo**. Es donde más se gana con menos:
+una atmósfera con movimiento casi imperceptible hace que la app se sienta viva sin
+robarle atención a nada.
 
-**La regla aquí es más estricta que en cualquier otro archivo: si el usuario nota el
-fondo, está mal.** Solo debe notarlo si lo mira fijamente a propósito.
+**Regla que no se negocia: si el usuario nota el fondo, está mal.** Solo debe notarlo si
+lo mira fijamente a propósito, nunca de reojo mientras reserva un puesto o revisa un
+pago.
 
-## Medidas
+## Por qué esta vez NO recomiendo una IA de video
 
-- **Ocupa toda la pantalla**, detrás del contenido. `position: fixed; inset: 0;`
-- **Debe funcionar de 320x568 (celular chico) a 2560x1440 (monitor grande)** con el mismo
-  archivo. Por eso: `preserveAspectRatio="xMidYMid slice"` y todo definido en
-  proporciones, no en píxeles.
-- **Nunca genera barra de desplazamiento horizontal.**
+Los carros son un momento puntual (la pantalla de inicio, unos segundos de atención). El
+fondo, en cambio, **está corriendo todo el rato, en todas las pantallas**. Un video de
+fondo en bucle constante:
 
-## Las tres capas
+- Obliga al navegador a decodificar video de forma continua → **gasta batería** en el
+  celular de tu vecino de una manera que un carro que se ve 5 segundos no gasta.
+- Pesa más que una imagen fija + un poco de CSS, y esa diferencia se paga en **cada
+  pantalla que se abre**, no una sola vez.
 
-### 1. Base sólida
-Color plano `#0a0c11`. No se anima nunca.
+Por eso aquí el plan es: **una sola imagen fija generada con IA** (la atmósfera), animada
+después con **CSS puro** — exactamente como ya funciona el resto de microinteracciones de
+la app (ripples, success-pop). Es la buena práctica real para un fondo persistente, no
+una limitación del método.
 
-### 2. Rejilla
-Líneas finas de 1 px en `rgba(255,255,255,0.025)` formando cuadrícula de **40x40 px**,
-con **desvanecimiento hacia los bordes** (más visible en el centro-superior, invisible
-abajo). En pantallas de más de 700 px la cuadrícula pasa a 56x56 px, para que no se vea
-apretada.
+## Encuadre y qué tan grande hay que generarla
 
-**Animación:** se desplaza **2 px en diagonal** (1 px en x, 1 px en y) en un ciclo de
-**20 segundos**, ida y vuelta, `ease-in-out`. Es tan lento que nadie lo ve moverse, pero
-la pantalla deja de sentirse muerta.
+- **Formato maestro: 2400×1350 px (relación 16:9)**, pensada para cubrirse con
+  `object-fit: cover` desde 320×568 (celular) hasta 2560×1440 (monitor grande) sin
+  recortes que arruinen la composición.
+- **Composición centrada y sin ningún punto focal fuerte.** Nada de formas reconocibles,
+  nada de un "objeto" que el ojo busque. Es una atmósfera, no una escena.
+- **Debe seguir funcionando con cualquier contenido encima**: tarjetas, texto, botones.
+  Prueba mental: si no puedes leer un párrafo de texto claro sobre ella sin esfuerzo,
+  está demasiado cargada.
+- Sin bordes duros ni límites visibles: todo se desvanece hacia las esquinas.
 
-### 3. Resplandor de acento
-Dos manchas radiales grandes y suaves del color de acento:
+## Qué pintar: la atmósfera
 
-| Mancha | Posición | Tamaño | Opacidad | Ciclo |
-|---|---|---|---|---|
-| Principal | 20 % / 0 % (arriba a la izquierda) | 70 % del ancho | 0.10 → 0.16 | 12 s |
-| Secundaria | 85 % / 40 % (derecha, media altura) | 50 % del ancho | 0.05 → 0.09 | 17 s |
+Una versión fotográfica/pictórica, mucho más rica que la rejilla plana actual, pero
+igual de contenida:
 
-Las dos **respiran** cambiando opacidad y escala (1 → 1.08), pero con **ciclos primos
-entre sí (12 y 17 segundos)**: así nunca coinciden y el patrón no se vuelve predecible.
-Ese es el truco.
+1. **Base:** un ambiente oscuro tipo estudio o estacionamiento moderno desenfocado —
+   sugiere estructura (líneas arquitectónicas suaves, quizás vigas o columnas muy
+   desenfocadas al fondo) sin que se reconozca literalmente un lugar. Tonos entre
+   `#0a0c11` y `#12151c`.
+2. **Una rejilla arquitectónica muy sutil**, insinuada más que dibujada — como si se
+   intuyeran las líneas de un techo o un piso de concreto muy desenfocado, no una
+   cuadrícula gráfica perfecta como la actual. Apenas perceptible, casi textura.
+2. **Dos resplandores atmosféricos** del color de acento, como si fueran reflejos de luz
+   ambiental lejana (no focos, no fuentes de luz reconocibles): uno grande arriba a la
+   izquierda, cubriendo cerca del 70 % del ancho a baja intensidad; otro más pequeño a la
+   derecha, a media altura, más tenue todavía. Ambos muy desenfocados, sin bordes duros.
+4. **Grano fotográfico fino** (film grain sutil) en vez de la textura vectorial plana:
+   esto es lo que más diferencia a esta versión de la anterior — se siente fotografiado,
+   no dibujado.
+
+## La única imagen — sirve como inicio y como final (es un bucle)
+
+Como toda la animación de este fondo es un bucle continuo, **se genera una sola imagen**:
+es al mismo tiempo el primer y el último fotograma. No hace falta una segunda imagen.
+
+- Atmósfera oscura descrita arriba, con los dos resplandores de acento en su posición e
+  intensidad **promedio** (ni al mínimo ni al máximo de su respiración — el punto medio
+  del ciclo, para que la animación de CSS pueda subir y bajar la intensidad en ambas
+  direcciones desde ahí).
+- Grano fotográfico fino visible pero discreto.
+- Composición sin ningún punto focal fuerte, válida para cubrir cualquier proporción de
+  pantalla.
+
+## La animación — en bucle, con CSS puro (no con IA de video)
+
+Sobre la única imagen generada, se aplican capas de movimiento con CSS, igual que ya hace
+el resto de la app:
+
+| Qué | Cómo | Duración | Nota |
+|---|---|---|---|
+| **Zoom respirado** (*Ken Burns* casi inmóvil) | `transform: scale()` de 1.00 a 1.015 | 24 s, ida y vuelta, `ease-in-out` | El movimiento más lento de toda la app — si se nota, se baja aún más |
+| **Resplandor principal** | `filter: brightness()` sobre una máscara de esa zona, o una capa de degradado radial superpuesta que sube y baja de opacidad | 12 s | Independiente del zoom |
+| **Resplandor secundario** | Igual que el principal | 17 s, con 3 s de retraso | Deliberadamente distinto de 12 s: nunca coincide con el principal |
 
 ```css
-@keyframes deriva  { 0%,100% { transform: translate(0,0); } 50% { transform: translate(1px,1px); } }
-@keyframes brillar { 0%,100% { opacity:.10; transform: scale(1); } 50% { opacity:.16; transform: scale(1.08); } }
+.fondo-app {
+  background-image: url('fondo.webp');
+  background-size: cover;
+  background-position: center;
+  animation: respirar-fondo 24s ease-in-out infinite;
+}
+.fondo-app::before, .fondo-app::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(60% 50% at 20% 0%, rgba(var(--accent-rgb), .14), transparent 70%);
+}
+.fondo-app::after {
+  background: radial-gradient(50% 45% at 85% 40%, rgba(var(--accent-rgb), .07), transparent 70%);
+  animation: brillar-secundario 17s ease-in-out infinite 3s;
+}
+.fondo-app::before { animation: brillar-principal 12s ease-in-out infinite; }
 
-.rejilla  { animation: deriva  20s ease-in-out infinite; }
-.glow-1   { animation: brillar 12s ease-in-out infinite; transform-origin: 20% 0%; }
-.glow-2   { animation: brillar 17s ease-in-out infinite 3s; transform-origin: 85% 40%; opacity:.05; }
+@keyframes respirar-fondo     { 0%,100% { transform: scale(1); } 50% { transform: scale(1.015); } }
+@keyframes brillar-principal  { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+@keyframes brillar-secundario { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fondo-app, .fondo-app::before, .fondo-app::after { animation: none !important; }
+}
 ```
 
-## Variante opcional: partículas
+Esto reutiliza el mismo esqueleto de variables de color que ya usa toda la app
+(`--accent-rgb`), así que **los resplandores sí cambian con el acento del usuario** sin
+regenerar la imagen — solo la atmósfera base de fondo (el ambiente oscuro y el grano) es
+fija; el color vivo va siempre en la capa CSS, nunca "horneado" en la imagen.
 
-**Solo si la primera versión se ve demasiado quieta.** Entre 6 y 10 puntos de 1.5 a 2.5 px
-en color de acento al 12 % de opacidad, subiendo muy lentamente (40 a 70 segundos de
-recorrido completo) y desvaneciéndose al llegar arriba.
+> **Por qué esto es mejor que pedirle el resplandor de color a la IA de imágenes:**
+> si el resplandor quedara pintado dentro de la imagen, habría que generar 5 versiones
+> (una por acento) de una imagen que pesa mucho más que un simple `radial-gradient` de
+> CSS. Separando el color en una capa de CSS, **una sola imagen sirve para los cinco
+> acentos** y el archivo pesa una fracción de lo que pesaría regenerarla cinco veces.
 
-**Condiciones para aceptarla:**
-- Máximo 10 puntos. Con más, el celular gasta batería.
-- Se apagan por completo con `prefers-reduced-motion`.
-- Si al mirar la app tu ojo se va a un punto, sobran los puntos.
+## Prompt listo para la IA de imágenes
 
-## Prompt para la IA generativa
-
-> Fondo vectorial SVG a pantalla completa para una aplicación web oscura de estilo
-> minimalista-futurista. Debe ser **extremadamente sutil**: el usuario no debe notarlo a
-> menos que lo mire fijamente.
+> Fondo atmosférico oscuro fotorrealista para una aplicación web de estilo
+> minimalista-futurista, formato 2400×1350px (relación 16:9). **Debe ser extremadamente
+> sutil y sin ningún punto focal reconocible** — es una atmósfera, no una escena con
+> objetos.
 >
-> Tres capas, con `preserveAspectRatio="xMidYMid slice"` para cubrir desde 320x568 hasta
-> 2560x1440 con el mismo archivo:
+> Ambiente: un espacio oscuro tipo estudio o estacionamiento moderno, completamente
+> desenfocado, con apenas la insinuación de líneas arquitectónicas suaves (posibles vigas
+> o bordes de concreto muy fuera de foco) en tonos que van de `#0a0c11` a `#12151c`. Sin
+> ninguna forma, objeto, vehículo, persona ni texto reconocible en ningún punto de la
+> imagen.
 >
-> 1. Un fondo sólido de color `#0a0c11`.
-> 2. Una rejilla de líneas de 1px en `rgba(255,255,255,0.025)` formando cuadrícula de
->    40x40px, con un desvanecimiento que la hace visible en el centro y la parte
->    superior e invisible hacia abajo y los bordes. En pantallas de más de 700px de
->    ancho la cuadrícula pasa a 56x56px mediante `@media (min-width:700px)`.
-> 3. Dos manchas radiales grandes y difusas en color `#3ad4e6` (en una capa llamada
->    "acento"): la principal centrada al 20% horizontal y 0% vertical, de un tamaño
->    equivalente al 70% del ancho, con opacidad base 0.10; y la secundaria centrada al
->    85% horizontal y 40% vertical, de un 50% del ancho, con opacidad base 0.05. Ambas se
->    desvanecen a transparente en los bordes.
+> Dos zonas de resplandor ambiental muy suave y difuso, en un tono neutro azulado-grisáceo
+> tenue (no un color vivo, solo una insinuación de temperatura de luz): una grande arriba
+> a la izquierda cubriendo cerca del 70% del ancho a baja intensidad, otra más pequeña y
+> más tenue a la derecha, a media altura. Ambas completamente desenfocadas, sin bordes
+> definidos, mezclándose con el fondo.
 >
-> Animación en bucle infinito con CSS `@keyframes`, animando únicamente `transform` y
-> `opacity`: la rejilla se desplaza 1px en horizontal y 1px en vertical en un ciclo de 20
-> segundos de ida y vuelta con `ease-in-out`; la mancha principal varía entre opacidad
-> 0.10 y 0.16 con escala de 1 a 1.08 en un ciclo de 12 segundos; y la secundaria varía
-> entre opacidad 0.05 y 0.09 con escala de 1 a 1.08 en un ciclo de 17 segundos, con 3
-> segundos de retraso inicial. Los ciclos de 12 y 17 segundos son deliberadamente
-> distintos para que las dos manchas nunca se sincronicen.
+> Grano fotográfico fino y sutil en toda la imagen, dándole una textura fotografiada en
+> vez de una apariencia digital plana. Composición sin ningún punto de atención fuerte,
+> válida para verse recortada tanto en formato vertical de celular como en formato
+> horizontal ancho de escritorio sin perder su sentido — todo el interés visual debe
+> repartirse suavemente, no concentrarse en una zona que se pueda recortar.
 >
-> Sin partículas, sin estrellas, sin texto. Nada debe generar desplazamiento horizontal.
-> Incluye `@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }`.
-> Máximo 15 KB.
+> Sin texto, sin marcas de agua, sin logotipos, sin ningún color vivo o saturado (los
+> acentos de color se añaden después por separado). Alta resolución, fotorrealista con
+> grano sutil, extremadamente minimalista y de bajísimo contraste.
 
 ## Antes de darlo por bueno
 
-- [ ] **Míralo 30 segundos seguidos.** Si te distrae, hay que bajarle.
-- [ ] Pon una tarjeta de contenido encima: el texto tiene que leerse sin esfuerzo.
-- [ ] En un monitor de 2560 px no se ve pixelado ni la rejilla se ve gigante.
-- [ ] En un celular de 320 px no aparece barra horizontal.
-- [ ] Con el acento dorado (`#e8c46a`) el resplandor no se ve amarillento ni sucio: es el
-      que peor se lleva con el fondo azulado.
+- [ ] **Míralo 30 segundos seguidos.** Si distrae, hay que bajarle aún más la intensidad
+      antes de generarla de nuevo.
+- [ ] Pon una tarjeta de contenido con texto encima: se debe leer sin ningún esfuerzo.
+- [ ] Recortada en 320×568 (celular) y en 2560×1440 (monitor grande) con `object-fit:
+      cover`, ninguna de las dos versiones muestra un "vacío" raro ni corta algo
+      importante — porque no hay nada importante que cortar, esa es la prueba.
+- [ ] El grano fotográfico se nota como textura, no como ruido digital molesto.
+- [ ] Con los cinco acentos de la app (cian, verde, violeta, dorado, rosa) aplicados por
+      CSS encima, ninguno se ve sucio o desentona con el tono base de la imagen.
+- [ ] Pesa poco: apunta a menos de 200 KB en WebP para la imagen fija; sin video de fondo
+      corriendo nunca.

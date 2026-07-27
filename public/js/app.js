@@ -13,6 +13,7 @@
   const LS_SESSIONS = 'voltio.res.sessions.v1';
   const LS_SEEN = 'voltio.res.seen.v1';
   const LS_ADMINGUEST = 'voltio.res.adminAsGuest.v1';
+  const LS_BORRADOR = 'voltio.res.borradorReserva.v1';
   const CONJUNTO = 'montreal';
   // MontReal: 3 torres, 8 pisos por torre, 4 apartamentos por piso (101 → 804).
   const TORRES = 3, PISOS = 8, APTOS_POR_PISO = 4;
@@ -234,10 +235,12 @@
     $('#accSignedIn').classList.toggle('hidden', !logged);
     const top = $('#topAvatar');
     if (logged) {
-      const name = VB.userName() || 'U', photo = user.photoURL;
+      const name = nombreVisible() || 'U', photo = user.photoURL;
       top.innerHTML = photo ? `<img src="${escapeHtml(photo)}" alt=""/>` : escapeHtml(name[0].toUpperCase());
       $('#accAvatar').innerHTML = photo ? `<img src="${escapeHtml(photo)}" alt=""/>` : escapeHtml(name[0].toUpperCase());
       $('#accName').textContent = name; $('#accEmail').textContent = user.email || '';
+      const inp = $('#acNombre');
+      if (inp && document.activeElement !== inp) inp.value = name;
       const b = [];
       if (esVecino()) b.push('<span class="sc-badge b-ver">✓ Vecino verificado</span>');
       if (VB.isGoogle()) b.push('<span class="sc-badge b-ver">✓ Google</span>');
@@ -288,6 +291,8 @@
   }
   function onProfileUpdate(wasAdmin) {
     const nowAdmin = isAdmin();
+    // El nombre elegido manda en todo lo que se escriba de aquí en adelante.
+    if (VB && VB.setDisplayName) VB.setDisplayName(myProfile && myProfile.name);
     syncPrefsOnLogin();
     if (currentView === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); }
     loadAccesoUI(); renderGate();
@@ -581,6 +586,25 @@
      Sin él la app se puede mirar, pero no reservar ni publicar.
      ========================================================= */
   const esVecino = () => isAdmin() || !!(myProfile && myProfile.verificado === true);
+
+  /* El nombre con el que los vecinos te ven en toda la app. Arranca con el del
+     correo o el de Google, pero manda el que la persona haya elegido. */
+  function nombreVisible() {
+    if (myProfile && myProfile.name) return myProfile.name;
+    return (VB && VB.userName()) || '';
+  }
+  async function guardarNombre() {
+    const inp = $('#acNombre'), val = (inp.value || '').trim();
+    if (!val) { toast('Escribe cómo quieres que te vean', 'error'); inp.focus(); return; }
+    if (val.length < 2) { toast('Ese nombre es muy corto', 'error'); return; }
+    try {
+      $('#acNombreSave').disabled = true;
+      await VB.saveProfile({ name: val });
+      successPop();
+      toast('Listo: tus vecinos te verán como ' + val.split(' ')[0]);
+    } catch (e) { toast('No se pudo guardar el nombre', 'error'); }
+    finally { $('#acNombreSave').disabled = false; }
+  }
   function puedeActuar(accion) {
     if (!user) { needLogin(); return false; }
     if (esVecino()) return true;
@@ -657,12 +681,85 @@
   /* =========================================================
      Agendar (booking sheet)
      ========================================================= */
+  /* ---------- Cuánta energía va a caber en la reserva ----------
+     Por defecto lo calculamos: potencia del cargador × horas reservadas, menos
+     una hora de margen porque nadie llega y conecta al minuto exacto (ni se
+     queda hasta el último). Nunca bajamos de la mitad del tiempo reservado,
+     para que una reserva corta no estime cero.
+     El vecino puede escribir su propio estimado si sabe cuánto necesita. */
+  function horasUtiles(from, to) {
+    const dur = (hToMin(to) - hToMin(from)) / 60;
+    if (dur <= 0) return 0;
+    return Math.max(dur * 0.5, dur - 1);
+  }
+  // Ningún carro del conjunto recibe más que esto en una sola carga: sin este
+  // techo, una reserva de 12 h estimaría 81 kWh y asustaría al vecino con un
+  // número que jamás va a pagar.
+  const KWH_TECHO = 60;
+  function kwhCalculado(sp, from, to) {
+    const h = horasUtiles(from, to);
+    if (!h) return 0;
+    const bruto = (sp.pow || 7.4) * h;
+    return Math.round(Math.min(bruto, KWH_TECHO) * 10) / 10;
+  }
+
+  let bkModo = 'auto';
+  /* Recalcula el estimado y explica de dónde sale, para que nadie se lleve una
+     sorpresa con el cobro. */
+  function refrescarEstimado(sp) {
+    if (!$('#bkEst')) return;
+    const from = $('#bkFrom').value, to = $('#bkTo').value;
+    const kwh = kwhEstimado(sp);
+    $('#bkEst').textContent = fmtCOP(kwh * (sp.precio || 0));
+    if (bkModo === 'auto') {
+      const h = horasUtiles(from, to);
+      const dur = (hToMin(to) - hToMin(from)) / 60;
+      $('#bkAutoKwh').textContent = h ? fmtKwh(kwh) : '—';
+      const topado = h && (sp.pow || 7.4) * h > KWH_TECHO;
+      $('#bkAutoNota').innerHTML = !h
+        ? 'Elige un horario válido para poder calcularlo.'
+        : topado
+          ? `Con <b>${fmtNum(dur, 1)} h</b> reservadas a <b>${fmtNum(sp.pow || 7.4, 1)} kW</b> te sobra tiempo: contamos <b>${KWH_TECHO} kWh</b>, que es más de lo que cabe en la batería de un carro normal. Si sabes cuánto necesitas, ponlo tú.`
+          : `Reservas <b>${fmtNum(dur, 1)} h</b> y el cargador da <b>${fmtNum(sp.pow || 7.4, 1)} kW</b>. Contamos <b>${fmtNum(h, 1)} h</b> de carga efectiva porque siempre se pierde un rato entre que llegas, conectas y te vas.`;
+    }
+    guardarBorrador(sp.id);
+  }
+  function kwhEstimado(sp) {
+    if (bkModo === 'manual') return Math.max(0, parseNum($('#bkKwh').value));
+    return kwhCalculado(sp, $('#bkFrom').value, $('#bkTo').value);
+  }
+
+  /* ---------- Borrador de la reserva ----------
+     Si el vecino se sale a buscar el código del conjunto, cierra la app o se le
+     acaba la batería, al volver encuentra lo que ya había puesto. */
+  function guardarBorrador(stationId) {
+    if (!$('#bkFecha')) return;
+    const b = {
+      stationId, fecha: $('#bkFecha').value, from: $('#bkFrom').value, to: $('#bkTo').value,
+      modo: bkModo, kwh: $('#bkKwh') ? $('#bkKwh').value : '', at: Date.now()
+    };
+    try { localStorage.setItem(LS_BORRADOR, JSON.stringify(b)); } catch (e) {}
+  }
+  function leerBorrador(stationId) {
+    try {
+      const b = JSON.parse(localStorage.getItem(LS_BORRADOR));
+      // Solo sirve para el mismo puesto y si es de las últimas 24 horas.
+      if (b && b.stationId === stationId && Date.now() - (b.at || 0) < 864e5) {
+        if (!b.fecha || b.fecha >= ymd(new Date())) return b;
+      }
+    } catch (e) {}
+    return {};
+  }
+  const borrarBorrador = () => { try { localStorage.removeItem(LS_BORRADOR); } catch (e) {} };
+
   function openBookingSheet(sp) {
     if (!user) { needLogin(); return; }
     sheetStation = sp;
-    const defDate = filters.day === 'hoy' ? ymd(new Date()) : filters.day === 'man' ? ymd(addDays(new Date(), 1)) : (filters.day === 'pick' && filters.date) ? filters.date : ymd(new Date());
+    const bd = leerBorrador(sp.id);
+    const defDate = bd.fecha || (filters.day === 'hoy' ? ymd(new Date()) : filters.day === 'man' ? ymd(addDays(new Date(), 1)) : (filters.day === 'pick' && filters.date) ? filters.date : ymd(new Date()));
     const [bs] = bandRange(filters.band);
-    const defFrom = (filters.band !== 'any' ? String(bs).padStart(2, '0') + ':00' : (sp.desde || '08:00'));
+    const defFrom = bd.from || (filters.band !== 'any' ? String(bs).padStart(2, '0') + ':00' : (sp.desde || '08:00'));
+    const defTo = bd.to || sp.hasta || '20:00';
     const c = $('#sheetContent');
     c.innerHTML = `
       <div class="sh-head">
@@ -680,30 +777,55 @@
       ${(sp.fotos && sp.fotos.length) ? `<div class="foto-strip">${sp.fotos.map((f, i) => `<img src="${escapeHtml(f)}" alt="Foto ${i + 1} de ${escapeHtml(sp.nombre)}" loading="lazy"/>`).join('')}</div>` : ''}
       ${sp.condiciones ? `<div class="bk-pay" style="margin:0 0 14px">📋 ${escapeHtml(sp.condiciones)}</div>` : ''}
       <h3 class="sub-h">Agenda tu carga</h3>
-      <div class="grid-2">
-        <div class="field"><label>Fecha</label><div class="input-wrap"><input id="bkFecha" type="date" min="${ymd(new Date())}" value="${defDate}"/></div></div>
-        <div class="field"><label>Energía estimada</label><div class="input-wrap"><input id="bkKwh" inputmode="decimal" value="20" autocomplete="off"/><span class="unit">kWh</span></div></div>
-      </div>
+      <div class="field"><label>Fecha</label><div class="input-wrap"><input id="bkFecha" type="date" min="${ymd(new Date())}" value="${defDate}"/></div></div>
       <div class="grid-2" style="margin-top:10px">
         <div class="field"><label>Desde</label><div class="input-wrap"><input id="bkFrom" type="time" value="${defFrom}"/></div></div>
-        <div class="field"><label>Hasta</label><div class="input-wrap"><input id="bkTo" type="time" value="${sp.hasta || '20:00'}"/></div></div>
+        <div class="field"><label>Hasta</label><div class="input-wrap"><input id="bkTo" type="time" value="${defTo}"/></div></div>
       </div>
       <div class="bk-busy hidden" id="bkBusy"></div>
-      <div class="sh-est"><span>Costo estimado</span><b id="bkEst">${fmtCOP(20 * (sp.precio || 0))}</b></div>
+
+      <h3 class="sub-h">¿Cuánta energía vas a cargar?</h3>
+      <div class="segmented" id="bkModo">
+        <button class="seg-btn ${bd.modo === 'manual' ? '' : 'is-active'}" data-kmodo="auto" type="button">Calcúlalo por mí</button>
+        <button class="seg-btn ${bd.modo === 'manual' ? 'is-active' : ''}" data-kmodo="manual" type="button">Yo sé cuánto</button>
+      </div>
+      <div id="bkAutoBox" class="kwh-box${bd.modo === 'manual' ? ' hidden' : ''}">
+        <div class="kwh-auto"><b id="bkAutoKwh">—</b><span>kWh estimados</span></div>
+        <p class="hint" id="bkAutoNota" style="margin-top:8px"></p>
+      </div>
+      <div id="bkManualBox" class="field${bd.modo === 'manual' ? '' : ' hidden'}" style="margin-top:12px">
+        <label for="bkKwh">Energía que piensas cargar</label>
+        <div class="input-wrap input-wrap--big"><input id="bkKwh" inputmode="decimal" value="${bd.kwh || 20}" autocomplete="off"/><span class="unit">kWh</span></div>
+        <p class="hint">La batería de un carro pequeño llena son unos 40 kWh; una SUV, unos 75.</p>
+      </div>
+
+      <div class="sh-est"><span>Costo estimado</span><b id="bkEst">${fmtCOP(0)}</b></div>
+      <p class="hint bk-est-nota">Es un cálculo aproximado para que sepas a qué atenerte. <b>El cobro real lo hace el anfitrión con la lectura del contador</b> al terminar la carga.</p>
       <button id="bkSend" class="btn-primary" type="button" style="margin-top:14px"><span class="btn-glow"></span>Enviar solicitud de reserva</button>
       <button id="bkChat" class="btn-ghost btn-block" type="button" style="margin-top:10px">💬 Prefiero preguntarle primero</button>
       <p class="hint" style="text-align:center;margin-top:8px">${sp.demo ? 'Puesto de ejemplo: la confirmación es simulada.' : 'El anfitrión recibirá tu solicitud al instante y podrá aceptarla o declinarla.'}</p>`;
     openSheet('#spotSheet');
-    const est = () => $('#bkEst').textContent = fmtCOP(Math.max(0, parseNum($('#bkKwh').value)) * (sp.precio || 0));
-    $('#bkKwh').addEventListener('input', est);
+    bkModo = bd.modo === 'manual' ? 'manual' : 'auto';
+    refrescarEstimado(sp);
+
+    $$('#bkModo .seg-btn').forEach((b) => b.addEventListener('click', () => {
+      bkModo = b.dataset.kmodo;
+      $$('#bkModo .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b));
+      $('#bkAutoBox').classList.toggle('hidden', bkModo !== 'auto');
+      $('#bkManualBox').classList.toggle('hidden', bkModo !== 'manual');
+      refrescarEstimado(sp);
+      if (bkModo === 'manual') setTimeout(() => $('#bkKwh').focus(), 60);
+    }));
+    $('#bkKwh').addEventListener('input', () => refrescarEstimado(sp));
+    ['#bkFrom', '#bkTo'].forEach((s) => $(s).addEventListener('change', () => refrescarEstimado(sp)));
     $('#bkSend').addEventListener('click', () => submitBooking(sp));
     $('#bkChat').addEventListener('click', () => startChatWith(sp));
-    $('#bkFecha').addEventListener('change', () => pintarOcupadas(sp));
+    $('#bkFecha').addEventListener('change', () => { pintarOcupadas(sp); guardarBorrador(sp.id); });
     pintarOcupadas(sp);
   }
   async function submitBooking(sp) {
     const fecha = $('#bkFecha').value, from = $('#bkFrom').value, to = $('#bkTo').value;
-    const kwhEst = Math.max(1, parseNum($('#bkKwh').value) || 20);
+    const kwhEst = Math.max(1, kwhEstimado(sp) || 20);
     if (!fecha || !from || !to) { toast('Completa fecha y horas', 'error'); return; }
     if (hToMin(to) <= hToMin(from)) { toast('La hora final debe ser mayor', 'error'); return; }
     const wd = parseYmd(fecha).getDay(), dias = sp.dias || [1, 1, 1, 1, 1, 1, 1];
@@ -740,11 +862,17 @@
         throw e;
       }
       slotCache.delete(VB.sfKey(sp.id, fecha));
+      borrarBorrador();
       closeSheet('#spotSheet');
       goView('reservas');
-      successPop();
-      if (common) { toast('¡Puesto reservado! ✅'); notify('Reserva confirmada', 'Ya puedes usar ' + (sp.nombre || 'el puesto') + '. Paga por Bre-B a la administración.'); }
-      else { toast('Solicitud enviada 📨'); if (sp.demo) demoAutoConfirm(id, sp); }
+      const fx = parseYmd(fecha).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+      if (common) {
+        mostrarAviso('ok', '¡Puesto reservado!', `Ya está apartado para el <b>${escapeHtml(fx)}</b> de <b>${escapeHtml(from)}</b> a <b>${escapeHtml(to)}</b>. Puedes usarlo sin esperar a nadie.`);
+        notify('Reserva confirmada', 'Ya puedes usar ' + (sp.nombre || 'el puesto') + '. Paga por Bre-B a la administración.');
+      } else {
+        mostrarAviso('espera', 'Solicitud enviada', `${escapeHtml((sp.ownerName || 'El anfitrión').split(' ')[0])} ya la recibió. Te avisamos apenas la acepte.<br/><small>${escapeHtml(fx)} · ${escapeHtml(from)}–${escapeHtml(to)}</small>`);
+        if (sp.demo) demoAutoConfirm(id, sp);
+      }
     } catch (e) {
       $('#bkSend').disabled = false;
       toast(e.message === 'login' ? 'Inicia sesión para reservar' : 'No se pudo crear la reserva', 'error');
@@ -1089,7 +1217,8 @@
   }
   function loadPuestoForm(sp) {
     $('#spName').value = sp.nombre || ''; selectWithFallback('#spTorre', sp.torre || ''); $('#spNum').value = sp.numeroParqueadero || '';
-    $('#spSize').value = sp.tamano || 'Mediano'; $('#spPort').value = sp.puerto || 'Tipo 2'; $('#spPow').value = String(sp.pow || 7.4);
+    $('#spSize').value = sp.tamano || 'Mediano'; $('#spPort').value = sp.puerto || 'Tipo 2';
+    setPotencia(sp.pow || 7.4);
     $('#spCond').value = sp.condiciones || ''; $('#spPrecio').value = sp.precio || ''; $('#spFee').value = sp.serviceFee || ''; $('#spDesc').value = sp.discount || '';
     $('#spBreb').value = sp.breb || ''; $('#spTitular').value = sp.titular || '';
     if ($('#spBanco')) $('#spBanco').value = sp.banco || '';
@@ -1099,6 +1228,23 @@
     setWompiSwitch(!!sp.wompi);
     loadWompiConfig(sp.id);
   }
+  /* ---------- Potencia del cargador ----------
+     Las cuatro de siempre cubren casi todo, pero hay cargadores de 9,6 o de 16 kW:
+     "Otra…" abre un campo para escribir la que sea. */
+  const POW_FIJAS = ['3.6', '7.4', '11', '22'];
+  function setPotencia(kw) {
+    const v = String(kw || 7.4);
+    const esFija = POW_FIJAS.includes(v);
+    $('#spPow').value = esFija ? v : 'otra';
+    $('#spPowOtra').value = esFija ? '' : String(kw).replace('.', ',');
+    $('#spPowOtraField').classList.toggle('hidden', esFija);
+  }
+  function leerPotencia() {
+    if ($('#spPow').value !== 'otra') return parseFloat($('#spPow').value);
+    const v = parseNum($('#spPowOtra').value);
+    return v > 0 ? Math.round(v * 100) / 100 : 0;
+  }
+
   /* ---------- Pago en línea del anfitrión ---------- */
   function setWompiSwitch(on) {
     const sw = $('#spWompiOn'); if (!sw) return;
@@ -1144,10 +1290,13 @@
       toast('Deja al menos una forma de cobro: la llave Bre-B o el pago en línea', 'error');
       return;
     }
+    const pow = leerPotencia();
+    if (!pow) { toast('Escribe cuánta potencia da tu cargador', 'error'); $('#spPowOtra').focus(); return; }
+    if (pow > 350) { toast('Esa potencia no parece de un cargador residencial. Revísala.', 'error'); $('#spPowOtra').focus(); return; }
     const data = {
       conjunto: CONJUNTO, nombre, torre: $('#spTorre').value.trim(), numeroParqueadero: $('#spNum').value.trim(),
       wompi: wompiOn, ownerVerificado: esVecino(),
-      tamano: $('#spSize').value, puerto: $('#spPort').value, pow: parseFloat($('#spPow').value),
+      tamano: $('#spSize').value, puerto: $('#spPort').value, pow: pow,
       condiciones: $('#spCond').value.trim(),
       precio: Math.max(0, Math.round(parseNum($('#spPrecio').value))) || settings.pricePerKwh,
       serviceFee: Math.max(0, Math.round(parseNum($('#spFee').value))), discount: Math.max(0, Math.round(parseNum($('#spDesc').value))),
@@ -1805,6 +1954,25 @@
     btn.appendChild(ink);
     setTimeout(() => ink.remove(), 640);
   }
+  /* Aviso grande en el centro: lo usamos cuando pasa algo que el vecino tiene
+     que ver sí o sí, como que su solicitud quedó enviada y falta que la acepten. */
+  function mostrarAviso(tipo, titulo, detalle) {
+    const el = document.createElement('div');
+    el.className = 'aviso-centro aviso-' + tipo;
+    const ico = tipo === 'ok' ? '✓' : tipo === 'espera' ? '📨' : '!';
+    el.innerHTML = `<div class="aviso-caja">
+        <span class="aviso-ico">${ico}</span>
+        <b>${escapeHtml(titulo)}</b>
+        <p>${detalle || ''}</p>
+        ${tipo === 'espera' ? '<span class="aviso-pill">⏳ Esperando confirmación</span>' : ''}
+      </div>`;
+    document.body.appendChild(el);
+    if (navigator.vibrate) { try { navigator.vibrate([18, 28, 40]); } catch (e) {} }
+    const cerrar = () => { el.classList.add('is-out'); setTimeout(() => el.remove(), 320); };
+    el.addEventListener('click', cerrar);
+    setTimeout(cerrar, 3800);
+  }
+
   function successPop() {
     if (navigator.vibrate) { try { navigator.vibrate([18, 28, 40]); } catch (e) {} }
     if (!settings.animations || prefersReduced()) return;
@@ -2070,7 +2238,34 @@
     if (settings.ownerName) L.push('Cargador de ' + settings.ownerName);
     L.push('Gracias por cargar con energía limpia ⚡'); return L.join('\n');
   }
-  async function shareReceipt(c) { const t = receiptText(c); if (navigator.share) { try { await navigator.share({ title: 'Recibo Voltio', text: t }); return; } catch (e) { if (e && e.name === 'AbortError') return; } } window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank'); }
+  /* Compartir el recibo: por defecto como imagen, que es lo que la gente espera
+     recibir por WhatsApp. El texto plano sigue disponible para quien lo prefiera. */
+  let shareFmt = 'img';
+  async function shareReceipt(c) {
+    const t = receiptText(c);
+    if (shareFmt === 'txt' || !window.VRecibo) {
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Recibo Voltio', text: t }); return; }
+        catch (e) { if (e && e.name === 'AbortError') return; }
+      }
+      window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank');
+      return;
+    }
+    const btn = $('#shareBtn'), original = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = shareFmt === 'pdf' ? 'Armando el PDF…' : 'Armando la imagen…';
+    try {
+      const r = await window.VRecibo.compartir(c, shareFmt, { texto: t, stationName: c.stationName || settings.stationName });
+      if (r === 'descargado') toast(shareFmt === 'pdf' ? 'PDF guardado en tus descargas 📄' : 'Imagen guardada en tus descargas 🖼️');
+    } catch (e) {
+      toast('No pudimos armar el recibo. Te lo compartimos como texto.', 'error');
+      if (navigator.share) { try { await navigator.share({ title: 'Recibo Voltio', text: t }); } catch (e2) {} }
+      else window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  }
   const csvCell = (v) => { v = v == null ? '' : String(v); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   function download(name, content, type) { const b = new Blob([content], { type }), u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 200); }
   function exportCSV() {
@@ -2351,7 +2546,9 @@
       refreshMode();
     });
 
-    // Perfil del residente y código del conjunto
+    // Nombre visible, perfil del residente y código del conjunto
+    $('#acNombreSave').addEventListener('click', guardarNombre);
+    $('#acNombre').addEventListener('keydown', (e) => { if (e.key === 'Enter') guardarNombre(); });
     $('#pfSave').addEventListener('click', saveProfileHandler);
     $('#acSave').addEventListener('click', enviarCodigo);
     $('#acCodigo').addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarCodigo(); });
@@ -2360,6 +2557,19 @@
     $('#spQrPick').addEventListener('click', () => $('#spQrInput').click());
     $('#spQrInput').addEventListener('change', async () => { const f = $('#spQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), url); toast('QR cargado 📷'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#spQrInput').value = ''; });
     $('#spQrRemove').addEventListener('click', () => { spotQr = ''; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), null); });
+
+    // Potencia del cargador: "Otra…" abre el campo libre
+    $('#spPow').addEventListener('change', () => {
+      const otra = $('#spPow').value === 'otra';
+      $('#spPowOtraField').classList.toggle('hidden', !otra);
+      if (otra) setTimeout(() => $('#spPowOtra').focus(), 60);
+    });
+
+    // Formato del recibo al compartir
+    $$('#shareFormat .seg-btn').forEach((b) => b.addEventListener('click', () => {
+      shareFmt = b.dataset.fmt;
+      $$('#shareFormat .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b));
+    }));
 
     // Pago en línea (Wompi)
     $('#spWompiOn').addEventListener('click', () => {

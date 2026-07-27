@@ -26,7 +26,9 @@ try {
   db = initializeFirestore(app, {}, DB_ID);
 }
 
-const state = { user: null, profileSaved: false };
+// displayName: el nombre que el residente eligió en Ajustes. Manda sobre el del
+// correo o el de Google en todo lo que ve el resto del conjunto.
+const state = { user: null, profileSaved: false, displayName: null };
 
 /* ---------- Auth ---------- */
 function mapAuthError(e) {
@@ -51,8 +53,15 @@ function mapAuthError(e) {
 async function ensureProfile(u) {
   if (!u || state.profileSaved) return;
   try {
+    // El nombre solo se siembra la primera vez: si el residente ya eligió el
+    // suyo en Ajustes, volver a entrar no puede pisárselo.
+    let nombre = null;
+    try {
+      const prev = await getDoc(doc(db, 'users', u.uid));
+      if (prev.exists() && prev.data().name) { nombre = prev.data().name; state.displayName = nombre; }
+    } catch (e) {}
     await setDoc(doc(db, 'users', u.uid), {
-      name: u.displayName || (u.email ? u.email.split('@')[0] : 'Usuario'),
+      name: nombre || u.displayName || (u.email ? u.email.split('@')[0] : 'Usuario'),
       email: u.email || '',
       photoURL: u.photoURL || '',
       providers: u.providerData.map((p) => p.providerId),
@@ -67,7 +76,8 @@ const VB = {
   /* estado */
   user: () => state.user,
   uid: () => (state.user ? state.user.uid : null),
-  userName: () => (state.user ? (state.user.displayName || (state.user.email || '').split('@')[0] || 'Usuario') : null),
+  userName: () => (state.user ? (state.displayName || state.user.displayName || (state.user.email || '').split('@')[0] || 'Usuario') : null),
+  setDisplayName(n) { state.displayName = (n || '').trim() || null; },
   isGoogle: () => !!(state.user && state.user.providerData.some((p) => p.providerId === 'google.com')),
 
   onAuth(cb) {

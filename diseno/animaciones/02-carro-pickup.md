@@ -1,104 +1,198 @@
-# 02 · Camioneta pickup
+# 02 · Camioneta pickup — "Lista para el trabajo"
 
-> Lee antes `00-GUIA-GENERAL.md`. **Y lee `01-carro-automovil.md`**: las medidas, las
-> capas, las tres animaciones y el checklist son idénticos. Aquí solo va lo que cambia.
+> **Cambio de enfoque:** ya no pide código SVG, sino **dos fotografías fotorrealistas**
+> (imagen de inicio e imagen final) para una IA de imágenes, y el movimiento entre ambas
+> para una IA de video por fotogramas clave. Lee primero `01-carro-automovil.md`: aquí no
+> se repiten las explicaciones generales de encuadre, solo lo que cambia.
 
-## Por qué importa
+## Por qué importa tanto
 
-Es el vehículo **por defecto** de la app: el que ve quien nunca entra a Ajustes. Es el
-que más gente va a mirar, así que es el que mejor tiene que estar hecho.
+Es el vehículo **por defecto** de la app: lo ve todo el que nunca entra a Ajustes. Y su
+animación tiene que sentirse **distinta a la del sedán** — no es el mismo movimiento con
+otra carrocería. Donde el sedán es cinematográfico y calmado, la pickup es **mecánica y
+directa**: se enciende como quien prende las luces de trabajo antes de empezar la
+jornada. Menos elegancia, más energía práctica.
 
-## Medidas
+## El vehículo: en qué nos basamos
 
-Idénticas a las del sedán: `viewBox="0 0 520 300"`, suelo en y=250, llantas en
-**(125, 232)** y **(400, 232)** con radio 34.
+Una pickup eléctrica, con el lenguaje visual de las camionetas eléctricas actuales —
+frente robusto sin parrilla, plataforma sin motor delantero que permite un capó más
+funcional que agresivo. **Sin ningún logotipo, insignia ni nombre de modelo visible.**
 
-**La diferencia:** la pickup es más alta y más recta. El techo llega a **y=100** (10 px
-más arriba que el sedán) y el capó es notablemente más alto.
+Rasgos que la definen frente al sedán:
+- **Frente alto, ancho y vertical**, sin parrilla, con una **franja de luz LED más
+  gruesa y cuadrada** que la del sedán (menos "joya", más "herramienta").
+- **Cabina corta y erguida**, con el parabrisas casi vertical (nada de rake deportivo).
+- **Caja o platón trasero abierto**, con una barra o *sport bar* detrás de la cabina, y
+  una **franja de luces LED integradas en el borde superior del platón** — este es su
+  rasgo lumínico distintivo, muy distinto a la franja frontal continua del sedán.
+- **Guardabarros marcados y flanqueados**, con rines multi-radio más robustos que los del
+  sedán (no el diseño cerrado tipo disco).
+- **Altura al piso mayor** — se nota más espacio entre la carrocería y el suelo.
+- **Pintura gris grafito en acabado semi-mate** (menos brillante que el sedán, más
+  material de trabajo).
+- **Puerto de carga** en el guardabarros delantero, con aro iluminado.
 
-## Cómo debe verse
+## Encuadre, cámara y fondo
 
-**Lo que la hace una pickup y no otra cosa:**
-- **El platón trasero.** Es su firma y tiene que ser inconfundible: un cajón abierto,
-  plano, que ocupa **el tercio trasero** del vehículo, con el borde superior recto a la
-  altura del capó. Si esto no se ve claro, el dibujo falló.
-- **Cabina corta y cuadrada**, adelantada, con dos ventanas rectas (nada de curvas
-  deportivas). El parabrisas es más vertical que el del sedán.
-- **Capó alto y plano**, casi horizontal, que termina en un frente vertical y robusto.
-- **Separación visible entre la cabina y el platón** — una línea vertical que las
-  divide.
-- Aspecto de herramienta de trabajo: sólida, con los ángulos más marcados.
+Igual que el sedán (formato maestro 2400×1500 px, zona segura 80 % central, mismo
+estudio oscuro `#0a0c11` → `#12151c`, piso espejo difuso), con un ajuste:
 
-Todo lo demás (degradados, contorno, cristales, llantas, piezas de acento) igual que el
-sedán.
+- **Cámara ligeramente más baja: ~10° de elevación** (contra los 15° del sedán), para
+  que se sienta su altura y su masa desde un ángulo más "de calle" y menos "de vitrina".
+  Encuadre que muestre bien el platón trasero y la franja de luces de su borde.
 
-**Detalle propio:** en el borde trasero, un **rectángulo rojo `#ff5d6c` de 7x26** en
-(28, 190) haciendo de piloto trasero. No lleva acento: es rojo siempre.
+## Imagen A — "Apagada" (para la entrada, no es un bucle)
 
-**Tapa de carga:** en (452, 195), igual que el sedán.
+- Franja de luz frontal **apagada**.
+- Franja de luces del borde del platón **apagada**.
+- Puerto de carga apagado.
+- Contraluz de borde muy tenue (10-15 %), lo justo para separar la silueta del fondo.
+- Postura de reposo, suspensión en altura normal.
 
-## Las tres animaciones
+## Imagen B — "Encendida" (final de la entrada, y también el bucle)
 
-Exactamente las mismas del sedán (`01-carro-automovil.md`): **Reposo 5.5 s**,
-**Cargando 2.4 s**, **Listo 4 s**, todas en bucle.
+Mismo encuadre exacto, mismo vehículo, solo cambian las luces — y esta imagen es a la vez
+el destino de la entrada y el fotograma único del bucle siguiente.
 
-**Dos ajustes por el peso del vehículo:**
+- Franja de luz frontal **encendida por completo**, en el color de acento.
+- **Franja de luces del borde del platón encendida**, en el mismo color — este detalle es
+  el que más la diferencia del sedán.
+- Puerto de carga encendido.
+- Contraluz de borde a plena intensidad.
+- Reflejo del piso mostrando las luces encendidas.
 
-1. **La flotación es de 6 px, no de 7.** Una pickup pesa más; si flota igual que un
-   sedán se ve de juguete.
-2. **Añade un balanceo mínimo**: además de subir y bajar, el cuerpo rota **0.4 grados**
-   con un ciclo de 5.5 s desfasado 1.4 s respecto de la flotación. El eje de giro va en
-   el centro del vehículo, a la altura de las llantas (`transform-origin: 262px 232px`).
-   Es casi imperceptible y es justo lo que la hace sentir pesada.
+## Animación de entrada (A → B) — una sola vez, 2.2 segundos
+
+**La más rápida y directa de los cuatro carros** — nada de pausa contemplativa: se
+enciende como una herramienta que se pone a trabajar.
+
+- **0.0 – 0.3 s:** una pausa mínima, casi imperceptible.
+- **0.3 – 1.0 s:** la franja de luz frontal se enciende de golpe, de un extremo al otro,
+  más rápido y "cuadrado" que el barrido del sedán (menos suave, más directo).
+- **0.9 – 1.6 s:** justo después, la franja de luces del borde del platón se enciende
+  **de atrás hacia adelante**, como una secuencia de luces de trabajo activándose una a
+  una (aunque el resultado final sea una franja continua, el encendido tiene ese
+  recorrido).
+- **1.3 – 2.2 s:** el puerto de carga se enciende y el contraluz de borde sube a
+  intensidad plena; el reflejo del piso aparece.
+- Curva de aceleración: `ease-out` marcado — entra rápido y se asienta, sin el
+  `ease-in-out` suave del sedán. Se debe sentir mecánico, no ceremonioso.
+
+## Animación en bucle (B → B) — infinita, 4.0 segundos
+
+Más corta que el bucle del sedán (6 s): el ritmo es más despierto, como un motor al
+ralentí, no como una respiración lenta.
+
+- **La carrocería sube y baja 6 px** (más que los 4-5 px del sedán: es un vehículo más
+  pesado y su movimiento debe notarse un poco más, con `ease-in-out`).
+- **Balanceo mínimo:** además de subir y bajar, el vehículo se inclina **apenas 0.3-0.4°**
+  hacia atrás y adelante, como si tuviera que asentar su propio peso — el sedán no tiene
+  este balanceo, es exclusivo de la pickup y el 4x4.
+- **La franja de luces del platón parpadea suavemente una vez por ciclo** (no late
+  continuamente como la del sedán): sube de 85 % a 100 % de brillo y vuelve, con un
+  pequeño "salto" a mitad de camino, como una luz de trabajo que confirma que sigue
+  encendida — un carácter más "utilitario" que "orgánico".
+- El reflejo del piso acompaña el movimiento vertical.
+
+> **Nota de color:** igual que con el sedán, la Imagen A no muestra ningún acento y sirve
+> para las cinco variantes. Genera 5 versiones de la Imagen B (una por color), cambiando
+> solo la palabra de color de las dos franjas de luz y el puerto de carga. El prompt de
+> movimiento no cambia entre acentos.
+
+---
+
+## Prompt listo — Imagen A ("Apagada")
+
+> Fotografía de producto automotriz ultra realista de una **camioneta pickup eléctrica**,
+> vista de tres cuartos delantero, cámara elevada 10° sobre el horizonte, lente de 75mm,
+> en un estudio fotográfico completamente oscuro con degradado de `#0a0c11` arriba a
+> `#12151c` en el piso, piso tipo espejo difuso que refleja al 30% de nitidez.
+>
+> El vehículo: frente alto, ancho y vertical sin parrilla, cabina corta y erguida con
+> parabrisas casi vertical, platón o caja trasera abierta con una barra tipo *sport bar*
+> detrás de la cabina, guardabarros marcados y flanqueados, rines multi-radio robustos,
+> buena altura al piso. Pintura gris grafito en acabado semi-mate. **Sin ningún logotipo,
+> insignia ni nombre de marca o modelo visible.**
+>
+> Estado: completamente **apagada y a oscuras** — tanto la franja de luz frontal como la
+> franja de luces integrada en el borde superior del platón están apagadas, sin ningún
+> brillo. Un contraluz de borde extremadamente tenue (10-15%) en `#3ad4e6` recorre apenas
+> el contorno del vehículo. Composición: el vehículo y su sombra caben dentro del 80%
+> central del encuadre 2400×1500px (16:10), sin tocar los bordes, con el platón trasero y
+> su franja de luces bien visibles.
+>
+> Sin texto, sin marcas de agua, sin interfaz, sin personas ni otros vehículos. Alta
+> resolución, fotorrealista, iluminación de estudio profesional.
+
+## Prompt listo — Imagen B ("Encendida", cian por defecto)
+
+> [Misma descripción del vehículo, cámara, encuadre y fondo de la Imagen A.] Cambia solo
+> el estado de las luces: la franja de luz frontal está **completamente encendida** en
+> `#3ad4e6`, y la franja de luces integrada en el borde superior del platón trasero
+> también está **completamente encendida** en el mismo color — ambas franjas nítidas y
+> nuevas. El puerto de carga en el guardabarros delantero tiene su aro iluminado en
+> `#3ad4e6`. El contraluz de borde está a intensidad plena. El piso refleja un brillo
+> difuso en `#3ad4e6` bajo el vehículo. Misma postura, mismo encuadre exacto.
+
+*(Para los otros acentos, repite cambiando `#3ad4e6` por `#4ade9a`, `#8b8cf0`, `#e8c46a`
+o `#e878b8`.)*
+
+## Prompt de movimiento — entrada (imagen A → imagen B)
+
+> Anima la transición en 2.2 segundos, cámara fija, con un ritmo mecánico y directo (no
+> ceremonioso). Tras una pausa mínima de 0.3 segundos, entre el segundo 0.3 y el 1.0 la
+> franja de luz frontal se enciende de golpe de un extremo a otro, con un movimiento más
+> rápido y marcado que un simple desvanecido. Entre el segundo 0.9 y el 1.6, la franja de
+> luces del borde del platón trasero se enciende con un recorrido de atrás hacia adelante,
+> como una secuencia de luces de trabajo activándose. Entre el segundo 1.3 y el 2.2, el
+> puerto de carga se enciende, el contraluz de borde sube a intensidad plena y aparece el
+> reflejo en el piso. Usa una curva de aceleración `ease-out` marcada: el encendido debe
+> sentirse rápido y luego asentarse, no suave y prolongado. La carrocería no se mueve
+> durante esta animación.
+
+## Prompt de movimiento — bucle (imagen B → imagen B, mismo fotograma)
+
+> Genera un bucle continuo de 4 segundos a partir de esta misma imagen como fotograma
+> inicial y final, cámara fija. El vehículo completo sube y baja 6 píxeles con
+> `ease-in-out`, y a la vez se inclina muy levemente (0.3 a 0.4 grados) hacia atrás y
+> adelante, como asentando su propio peso — un balanceo casi imperceptible pero presente.
+> La franja de luces del borde del platón trasero varía su brillo entre 85% y 100% con un
+> pequeño salto a mitad del ciclo, como una luz de trabajo confirmando que sigue
+> encendida, en vez de latir de forma continua y suave. El reflejo del piso acompaña el
+> movimiento vertical. Sin chispas ni partículas. El primer y último fotograma deben ser
+> idénticos para que el bucle no muestre ningún salto.
+
+## Si no tienes acceso a una IA de video (alternativa solo con CSS)
+
+Misma receta que el sedán (ver `01-carro-automovil.md`), con dos cambios: la duración del
+`encender` pasa a 2.2s con `ease-out`, y el `respirar` pasa a un ciclo de 4s con un salto
+de brillo a la mitad en vez de una curva suave continua:
 
 ```css
-@keyframes flotar-pesado { 0%,100% { transform: translateY(0) rotate(0deg); }
-                            50% { transform: translateY(-6px) rotate(-0.4deg); } }
-.carro { animation: flotar-pesado 5.5s ease-in-out infinite; transform-origin: 262px 232px; }
+.pickup-despierto {
+  animation: encender 2.2s ease-out forwards, parpadeo-trabajo 4s ease-in-out 2.2s infinite;
+}
+@keyframes parpadeo-trabajo {
+  0%, 100% { filter: brightness(1); }
+  45%      { filter: brightness(1); }
+  50%      { filter: brightness(1.1); }
+  55%      { filter: brightness(1); }
+}
 ```
 
-## Prompt para la IA generativa
+## Accesibilidad
 
-> Ilustración vectorial SVG de una **camioneta pickup eléctrica en vista lateral pura**,
-> mirando a la derecha, estilo minimalista-futurista de tablero automotriz. Sin
-> perspectiva, fondo transparente.
->
-> `viewBox="0 0 520 300"`. El vehículo ocupa de x=30 a x=490 y de y=100 a y=250. Llantas
-> centradas en (125,232) y (400,232), radio 34.
->
-> Silueta: es la más recta y robusta de una familia de cuatro vehículos. Su rasgo
-> inconfundible es el **platón trasero abierto**, un cajón plano que ocupa el tercio
-> trasero con el borde superior recto. Cabina corta y cuadrada adelantada, con dos
-> ventanas rectas y parabrisas casi vertical. Capó alto y plano que termina en un frente
-> vertical. Una línea vertical marca la separación entre la cabina y el platón. Ángulos
-> marcados, aspecto de vehículo de trabajo.
->
-> Carrocería con degradado vertical de `#2b3550` arriba a `#151b2c` en medio y `#0b0f1a`
-> abajo, reflejo blanco al 28% en el borde superior del capó y el techo, contorno de
-> 1.5px en `rgba(130,170,225,0.28)`. Ventanas con degradado diagonal de `#6ff0ff` al 55%
-> a `#0a1830` al 90%. Llantas negras `#0a0f18`, aro `#1c2740`, radios `#38507e`. Un
-> rectángulo redondeado rojo `#ff5d6c` de 7x26 en (28,190) como piloto trasero.
->
-> En una capa separada llamada "acento", con el color `#3ad4e6`: el faro delantero, su
-> halo difuminado, el aro exterior de cada rin, el centro del rin, y el aro de la tapa de
-> carga (círculo de radio 13 centrado en (452,195)).
->
-> Animación en bucle infinito de 5.5 segundos con CSS `@keyframes`, animando solo
-> `transform` y `opacity`: el vehículo sube y baja 6px y a la vez rota −0.4 grados con
-> origen en (262,232), con `ease-in-out`, para que se sienta pesado; la elipse de sombra
-> pasa de opacidad 0.45 y escala horizontal 1 a opacidad 0.28 y escala 0.92; el núcleo de
-> la tapa de carga late aparte con ciclo propio de 2.6 segundos entre opacidad 0.40 y
-> 0.85. Las llantas no giran.
->
-> Primer fotograma en reposo, bucle sin salto. Incluye
-> `@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }`.
-> Sin texto dentro de la imagen. Máximo 40 KB.
+Con "reducir movimiento" activado, mostrar solo la Imagen B fija, sin autoplay.
 
 ## Antes de darlo por bueno
 
 Además del checklist del sedán:
 
-- [ ] **El platón se entiende sin explicación.** Enséñaselo a alguien: si duda entre
-      pickup y SUV, el dibujo falló.
-- [ ] Se ve más pesada que el sedán, no solo más grande.
-- [ ] A 320 px de ancho el corte entre cabina y platón sigue distinguiéndose.
+- [ ] **La franja de luces del platón se entiende sin explicación.** Es su rasgo
+      distintivo frente al sedán: si no se nota, hay que hacerla más visible.
+- [ ] Se siente más pesada y más "de trabajo" que el sedán — compara ambos bucles uno
+      junto al otro.
+- [ ] El encendido es notablemente más rápido y directo que el del sedán (2.2s vs 4.0s).
+- [ ] A 340 px de ancho el platón trasero sigue siendo reconocible.
+- [ ] Ningún logotipo ni insignia de marca aparece en el vehículo.
