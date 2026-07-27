@@ -413,9 +413,14 @@ textarea {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
 }
 
-/* Consola de carga */
+/* Consola de carga
+   flex: none es lo que impide que se aplaste: dentro de .overlay-content (que es
+   una columna flex con scroll), un hijo encogible se comprime cuando la escena y
+   el recibo no caben, y el texto termina cortado por la mitad. Aquí nunca cede
+   altura: si algo tiene que encogerse, es la escena del carro. */
 .charge-console {
-  display: flex; align-items: stretch; justify-content: center; gap: 10px;
+  flex: none;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
   margin: 0 auto 14px; padding: 13px 14px; max-width: 440px; width: 100%;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
   box-sizing: border-box; overflow: hidden;
@@ -443,11 +448,14 @@ textarea {
 .charge-console.is-done .cc-status span:last-child { color: var(--accent-2); }
 
 /* Escena */
-.scene-holder { position: relative; margin-bottom: 8px; }
+/* La escena sí puede ceder alto cuando la pantalla queda corta: es decoración,
+   no información. Los números y el recibo nunca. */
+.scene-holder { position: relative; margin-bottom: 8px; flex: 0 1 auto; min-height: 0; }
 .scene { width: 100%; height: auto; max-height: 42vh; }
 
 /* Panel resultado */
 .result-panel {
+  flex: none;   /* el recibo tampoco se aplasta: es el dato que se va a cobrar */
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
   padding: 22px 20px;
   transform: translateY(24px); opacity: 0; pointer-events: none;
