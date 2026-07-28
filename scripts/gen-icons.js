@@ -150,9 +150,13 @@ function encodePNG(rgba, size) {
 }
 
 /* ---------- Generar ---------- */
+// Android necesita el maskable en los dos tamaños que busca Chrome: si solo
+// encuentra el de 512 puede caer al icono normal, meterlo en un fondo blanco y
+// estamparle encima el logo del navegador.
 const jobs = [
   { name: 'icon-192.png', size: 192, opts: {} },
   { name: 'icon-512.png', size: 512, opts: {} },
+  { name: 'icon-maskable-192.png', size: 192, opts: { maskable: true } },
   { name: 'icon-maskable-512.png', size: 512, opts: { maskable: true } },
   { name: 'apple-touch-icon.png', size: 180, opts: {} }
 ];
