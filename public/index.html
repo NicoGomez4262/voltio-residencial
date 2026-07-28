@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Exo+2:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="/css/styles.css?v=2.7.3" />
+  <link rel="stylesheet" href="/css/styles.css?v=2.7.4" />
 
   <style>
   /* ---------- Bienvenida (crítico: va incrustado para pintarse al instante) ---------- */
@@ -31,7 +31,7 @@
     --sp:#3ad4e6;--sp2:#5ee7c8;--on-sp:#06222a;
     /* Salvavidas: si el script no llegara a correr, la bienvenida se aparta
        sola y nadie se queda encerrado mirándola. */
-    animation:spAuto .4s ease 5.6s forwards}
+    animation:spAuto .4s ease 6.1s forwards}
   @keyframes spAuto{to{opacity:0;visibility:hidden;pointer-events:none}}
   .splash.is-out{opacity:0;transition:opacity .42s ease;pointer-events:none}
   body[data-accent="green"]  .splash{--sp:#4ade9a;--sp2:#3ad4e6;--on-sp:#05231a}
@@ -139,7 +139,7 @@
     // presentación: ahí la saltamos por completo.
     var vuelveDePago = /[?&](id|wpay)=/.test(location.search);
     var quieto = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var dura = vuelveDePago ? 0 : (quieto ? 1200 : 4200);
+    var dura = vuelveDePago ? 0 : (quieto ? 1200 : 4700);
 
     // Este script va incrustado justo debajo del elemento, así que se ejecuta
     // mientras se parsea la página: quitarla aquí ocurre antes del primer
@@ -684,7 +684,7 @@
           <div class="data-actions"><button id="exportBtn2" class="btn-ghost" type="button">Exportar recibos (CSV)</button><button id="resetBtn" class="btn-ghost btn-danger" type="button">Restablecer datos locales</button></div>
         </div>
 
-        <p class="version">Voltio Residencial v2.7.3 · Piloto conjunto MontReal ⚡</p>
+        <p class="version">Voltio Residencial v2.7.4 · Piloto conjunto MontReal ⚡</p>
       </section>
 
       <!-- ============ ADMIN: PANEL ============ -->
@@ -1034,11 +1034,11 @@
     </defs>
   </svg>
 
-  <script type="module" src="/js/backend.js?v=2.7.3"></script>
-  <script defer src="/js/reporte.js?v=2.7.3"></script>
-  <script defer src="/js/wompi.js?v=2.7.3"></script>
-  <script defer src="/js/recibo.js?v=2.7.3"></script>
-  <script defer src="/js/ocr.js?v=2.7.3"></script>
-  <script defer src="/js/app.js?v=2.7.3"></script>
+  <script type="module" src="/js/backend.js?v=2.7.4"></script>
+  <script defer src="/js/reporte.js?v=2.7.4"></script>
+  <script defer src="/js/wompi.js?v=2.7.4"></script>
+  <script defer src="/js/recibo.js?v=2.7.4"></script>
+  <script defer src="/js/ocr.js?v=2.7.4"></script>
+  <script defer src="/js/app.js?v=2.7.4"></script>
 </body>
 </html>
