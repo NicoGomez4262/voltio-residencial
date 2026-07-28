@@ -447,11 +447,13 @@ textarea {
 .charge-console.is-done .cc-dot { background: var(--accent-2); animation: none; }
 .charge-console.is-done .cc-status span:last-child { color: var(--accent-2); }
 
-/* Escena */
-/* La escena sí puede ceder alto cuando la pantalla queda corta: es decoración,
-   no información. Los números y el recibo nunca. */
-.scene-holder { position: relative; margin-bottom: 8px; flex: 0 1 auto; min-height: 0; }
-.scene { width: 100%; height: auto; max-height: 42vh; }
+/* Escena
+   Quien limita la altura es el propio SVG con max-height: si el contenedor se
+   encoge y el dibujo no, el carro se sale por abajo y se monta sobre el recibo.
+   Por eso el contenedor no cede (flex: none) y se ajusta a lo que mida la escena;
+   cuando la pantalla es corta, el overlay hace scroll y nada se solapa. */
+.scene-holder { position: relative; margin-bottom: 14px; flex: none; line-height: 0; }
+.scene { display: block; width: 100%; height: auto; max-height: 40vh; }
 
 /* Panel resultado */
 .result-panel {
