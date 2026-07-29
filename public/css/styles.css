@@ -417,9 +417,19 @@ textarea {
 /* =========================================================
    Overlay (animación + resultado)
    ========================================================= */
-.overlay { position: fixed; inset: 0; z-index: 100; display: none; }
+/* Mismo trato que las hojas: entraba con fundido y se iba de golpe. */
+.overlay {
+  position: fixed; inset: 0; z-index: 100; display: none;
+  transition: display var(--dur-ui) allow-discrete;
+}
 .overlay.is-open { display: block; }
-.overlay-backdrop { position: absolute; inset: 0; background: rgba(8,10,15,0.9); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fadeIn 0.25s ease; }
+.overlay-backdrop {
+  position: absolute; inset: 0; background: rgba(8,10,15,0.9);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  opacity: 1; transition: opacity var(--dur-ui) ease-out;
+}
+@starting-style { .overlay.is-open .overlay-backdrop { opacity: 0; } }
+.overlay:not(.is-open) .overlay-backdrop { opacity: 0; transition-duration: 180ms; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .overlay-content {
   position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -714,18 +724,44 @@ textarea {
 /* =========================================================
    Bottom sheets
    ========================================================= */
-.sheet { position: fixed; inset: 0; z-index: 200; display: none; }
+/* La hoja sube desde el borde de la pantalla y se va por donde vino. Antes
+   entraba en 320 ms cuidados y desaparecía en cero, que es la asimetría al
+   revés; y subía solo 44 px, así que mandaba el fundido y no se leía como algo
+   que llega desde abajo. Ahora viaja su propio alto (100%), sin píxeles
+   cableados, y son transiciones —no keyframes— para que abrir y cerrar rápido
+   retome el movimiento en vez de reiniciarlo. */
+.sheet {
+  position: fixed; inset: 0; z-index: 200; display: none;
+  /* allow-discrete hace que display espere a que la salida termine. Sin esto la
+     hoja desaparecería de golpe —que es justo lo que hacía antes—. Un motor que
+     no lo entienda se queda con ese comportamiento de siempre: nada se rompe. */
+  transition: display var(--dur-sheet) allow-discrete;
+}
 .sheet.is-open { display: block; }
-.sheet-backdrop { position: absolute; inset: 0; background: rgba(8,10,15,0.75); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fadeIn 0.22s ease; }
+.sheet-backdrop {
+  position: absolute; inset: 0; background: rgba(8,10,15,0.75);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  opacity: 1; transition: opacity var(--dur-ui) ease-out;
+}
 .sheet-panel {
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: 0;
+  position: absolute; left: 50%; bottom: 0;
   width: min(560px, 100%); max-height: 88dvh; overflow-y: auto;
   background: var(--surface); border: 1px solid var(--border-strong); border-bottom: none;
   border-radius: 22px 22px 0 0;
   padding: 10px 20px calc(22px + env(safe-area-inset-bottom));
-  animation: sheetUp 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
+  transform: translate(-50%, 0);
+  transition: transform var(--dur-sheet) var(--ease-drawer);
 }
-@keyframes sheetUp { from { transform: translate(-50%, 44px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+/* De dónde viene. Lo declara el CSS, no el JS: un elemento que acaba de salir
+   de display:none no tiene estado anterior del que transicionar, y ni el doble
+   rAF ni un reflow forzado lo arreglan de forma fiable. */
+@starting-style {
+  .sheet.is-open .sheet-backdrop { opacity: 0; }
+  .sheet.is-open .sheet-panel { transform: translate(-50%, 100%); }
+}
+/* Adónde se va. Irse importa menos que llegar: la salida es más corta. */
+.sheet:not(.is-open) .sheet-backdrop { opacity: 0; transition-duration: 180ms; }
+.sheet:not(.is-open) .sheet-panel { transform: translate(-50%, 100%); transition: transform 240ms var(--ease-out); }
 .sheet-grip { width: 40px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 4px auto 16px; }
 .sh-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sh-name { font-size: 18px; font-weight: 700; }
@@ -906,13 +942,21 @@ textarea {
   padding: 13px 16px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 500; color: var(--text);
   background: var(--surface-3); border: 1px solid var(--border-strong);
   box-shadow: var(--shadow);
-  animation: toastIn 0.3s cubic-bezier(0.2,0.9,0.3,1);
+  /* Transiciones, no keyframes: los toasts se apilan y uno que aún se está
+     montando tiene que poder irse desde donde va, no reiniciar desde cero.
+     El estado de entrada lo pone @starting-style, no el JS: un toast puede
+     saltar por un cambio de Firestore con la app en segundo plano, y ahí los
+     temporizadores van a un tick por segundo. Si el navegador no lo soporta,
+     el toast aparece de una y la salida sigue animando. */
+  opacity: 1; transform: none;
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
 }
-.toast.is-out { animation: toastOut 0.25s forwards; }
+@starting-style {
+  .toast { opacity: 0; transform: translateY(12px); }
+}
+.toast.is-out { opacity: 0; transform: translateY(8px); transition-duration: 160ms; }
 .toast .t-ico { width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 700; }
 .toast.t-error .t-ico { background: var(--danger); color: #fff; }
-@keyframes toastIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@keyframes toastOut { to { opacity: 0; transform: translateY(14px); } }
 
 #installBtn { color: var(--text-dim); }
 
@@ -1329,12 +1373,17 @@ button { -webkit-tap-highlight-color: transparent; }
   .chart-bar, .chart-val, .chart-line, .chart-area { transition-delay: 0ms !important; }
 
   /* Lo que aparece se anuncia con un fundido, sin viajar hasta su sitio */
-  .view, .details-body, .stagger, .toast, .sheet-panel,
-  .aviso-centro, .aviso-ico, .overlay-backdrop, .sheet-backdrop {
+  .view, .details-body, .stagger, .aviso-centro, .aviso-ico {
     animation: fadeIn 150ms ease-out !important;
   }
-  .toast.is-out, .aviso-centro.is-out { animation: avisoOut 150ms ease-out forwards !important; }
+  .aviso-centro.is-out { animation: avisoOut 150ms ease-out forwards !important; }
   .result-panel { transform: none !important; transition: opacity 150ms ease-out !important; }
+  /* Estos ya se mueven con transiciones: se les quita el viaje, no el aviso */
+  .toast { transform: none !important; transition: opacity 150ms ease-out !important; }
+  /* La hoja aparece y desaparece en su sitio, sin viaje y sin esperar salida */
+  .sheet, .overlay { transition: none !important; }
+  .sheet-panel { transform: translate(-50%, 0) !important; transition: none !important; }
+  .sheet-backdrop, .overlay-backdrop { transition: opacity 150ms ease-out !important; }
 
   /* Nada que lata, gire, flote o chispee por su cuenta */
   .pulse-dot, .charge-console.is-charging .cc-dot,

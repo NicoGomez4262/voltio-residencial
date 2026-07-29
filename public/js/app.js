@@ -1936,6 +1936,15 @@
   /* =========================================================
      Sheets util
      ========================================================= */
+  /* La hoja pasa de display:none a block, así que hay que dejar pintar un frame
+     con ella todavía abajo antes de subirla: si se añade todo en el mismo tick,
+     el navegador no ve dos estados y no hay nada que animar. Mismo truco de los
+     dos rAF que ya usan las gráficas. */
+  /* Abrir y cerrar es solo poner y quitar una clase: la entrada, la salida y el
+     momento de ocultar la hoja los resuelve el CSS con @starting-style y
+     transition-behavior: allow-discrete. Nada depende de rAF ni de temporizadores
+     —que en una pestaña en segundo plano no corren, o corren a un tick por
+     segundo, y dejaban la hoja abierta pero fuera de pantalla—. */
   function openSheet(sel) { $(sel).classList.add('is-open'); $(sel).setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden'; }
   function closeSheet(sel) { $(sel).classList.remove('is-open'); $(sel).setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; if (sel === '#chatSheet') { stopWatchers(['msgs']); chatCtx = null; } }
 
@@ -1946,8 +1955,12 @@
     const w = $('#toasts'), t = document.createElement('div');
     t.className = 'toast' + (type === 'error' ? ' t-error' : '');
     t.innerHTML = `<span class="t-ico">${type === 'error' ? '!' : '✓'}</span><span>${escapeHtml(msg)}</span>`;
+    // Dos a la vez como mucho: el tercero empuja al más viejo. La pila es una
+    // columna flex, así que cada entrada y cada salida recolocaba de golpe a los
+    // de abajo; con dos, ese salto casi no se da.
+    while (w.children.length >= 2) w.firstElementChild.remove();
     w.appendChild(t);
-    setTimeout(() => { t.classList.add('is-out'); setTimeout(() => t.remove(), 300); }, 2800);
+    setTimeout(() => { t.classList.add('is-out'); setTimeout(() => t.remove(), 200); }, 2800);
   }
 
   /* ---------- Micro-interacciones ---------- */
@@ -2116,8 +2129,29 @@
     anim.timers.push(setTimeout(() => { wheels.forEach((w) => { try { w.cancel(); } catch (e) {} }); finish(); }, 940));
   }
   function skipToResult(calc) { clearAnims(); const s = $('#sceneMain'); s.classList.remove('moving'); $('#evCar').style.transform = 'translateX(0)'; s.classList.add('charging'); setBattery(100); $('#roKwh').textContent = fmtKwh(calc.kwh); $('#roCop').textContent = fmtCOP(calc.total); setConsole('¡Completa!', 'done'); revealResult(calc); }
-  function openOverlay() { const o = $('#overlay'); o.classList.add('is-open'); o.setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden'; $('#resultPanel').classList.remove('is-visible'); $('#skipBtn').classList.remove('hidden'); }
-  function closeOverlay() { const o = $('#overlay'); o.classList.remove('is-open'); o.setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; $('.scene-holder').classList.remove('flash'); clearAnims(); $('#evCar').style.transform = 'translateX(0)'; setBattery(100); }
+  function openOverlay() {
+    const o = $('#overlay');
+    clearTimeout(o._reset);
+    o.classList.add('is-open');
+    o.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    $('#resultPanel').classList.remove('is-visible'); $('#skipBtn').classList.remove('hidden');
+  }
+  function closeOverlay() {
+    const o = $('#overlay');
+    o.classList.remove('is-open');
+    o.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    clearAnims();
+    clearTimeout(o._reset);
+    // Devolver el carro a su sitio va DESPUÉS del fundido: si se hace de una, se
+    // alcanza a ver saltando mientras el overlay todavía se está yendo.
+    o._reset = setTimeout(() => {
+      $('.scene-holder').classList.remove('flash');
+      $('#evCar').style.transform = 'translateX(0)';
+      setBattery(100);
+    }, 200);
+  }
   function buildBreakdown(c) {
     const row = (l, v, x) => `<div class="bd-row ${x || ''}"><span>${l}</span><b>${v}</b></div>`; let h = '';
     if (c.readingStart != null && (c.readingStart || c.readingEnd)) { h += row('Lectura inicial', fmtKwh(c.readingStart) + ' kWh'); h += row('Lectura final', fmtKwh(c.readingEnd) + ' kWh'); }
