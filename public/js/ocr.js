@@ -200,7 +200,7 @@
   function setStatus(msg, p) {
     const s = $('#ocrStatus'), b = $('#ocrBar');
     if (s) s.textContent = msg;
-    if (b) b.style.width = Math.round(Math.min(1, Math.max(0, p || 0)) * 100) + '%';
+    if (b) b.style.transform = 'scaleX(' + Math.min(1, Math.max(0, p || 0)).toFixed(4) + ')';
   }
 
   async function onPick(file) {

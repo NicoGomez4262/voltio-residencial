@@ -243,7 +243,10 @@ textarea {
 .live-value { font-size: 14px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .live-value b { font-family: var(--font-display); font-size: 18px; color: var(--text); font-weight: 600; }
 .live-bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; margin: 12px 0; }
-.live-bar i { display: block; height: 100%; border-radius: inherit; width: 0; background: var(--accent); transition: width 0.5s cubic-bezier(0.2,0.7,0.2,1); }
+/* Crece con transform, no con width: esto corre en cada tecla del formulario de
+   kWh, y animar width obliga al navegador a rehacer el layout en cada frame.
+   Mismo patrón que .rank-bar i. 250 ms para que vaya al ritmo del dedo. */
+.live-bar i { display: block; height: 100%; border-radius: inherit; width: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left center; transition: transform 250ms var(--ease-out); }
 .live-cost { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
 
 /* ---------- Detalles ---------- */
@@ -1153,10 +1156,13 @@ button { -webkit-tap-highlight-color: transparent; }
 
 /* Confirmación con checkmark */
 .success-pop { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; pointer-events: none; animation: spFade 0.35s 0.7s forwards; }
-.success-pop .sp-circle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; box-shadow: 0 0 0 12px rgba(var(--accent-rgb),0.14), 0 14px 40px -10px rgba(var(--accent-rgb),0.5); animation: spPop 0.5s cubic-bezier(.2,.8,.3,1.4); }
+.success-pop .sp-circle { width: 96px; height: 96px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; box-shadow: 0 0 0 12px rgba(var(--accent-rgb),0.14), 0 14px 40px -10px rgba(var(--accent-rgb),0.5); animation: spPop 420ms var(--ease-pop); }
 .success-pop svg { width: 52px; height: 52px; fill: none; stroke: var(--on-accent); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 .success-pop .sp-check { stroke-dasharray: 40; stroke-dashoffset: 40; animation: spCheck 0.4s 0.16s ease forwards; }
-@keyframes spPop { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+/* Nada aparece desde el tamaño cero: a cámara lenta eso es un punto que
+   explota, no un objeto que llega. Arranca casi a su tamaño y remata con el
+   sobrepaso justo —es una celebración, se le permite el rebote. */
+@keyframes spPop { 0% { transform: scale(0.92); opacity: 0; } 60% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes spCheck { to { stroke-dashoffset: 0; } }
 @keyframes spFade { to { opacity: 0; } }
 
@@ -1217,7 +1223,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .ocr-handle { position: absolute; right: -9px; bottom: -9px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; }
 .ocr-progress { margin-top: 16px; }
 .ocr-bar { height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-3); }
-.ocr-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 0.3s ease; }
+/* Progreso real y continuo: linear. Y por transform, no por width. */
+.ocr-bar i { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--accent); transform: scaleX(0); transform-origin: left center; transition: transform 300ms linear; }
 .ocr-result-box { margin-top: 14px; padding: 14px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid rgba(var(--accent-rgb), 0.3); }
 .ocr-result-label { display: block; font-size: 11px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text-mute); margin-bottom: 9px; }
 
@@ -1281,7 +1288,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .aviso-ico {
   display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 14px;
   border-radius: 50%; font-size: 26px; background: rgba(var(--accent-rgb), 0.14);
-  color: var(--accent); animation: avisoPop 0.5s cubic-bezier(.2,.8,.3,1.4);
+  color: var(--accent); animation: avisoPop 420ms var(--ease-pop);
 }
 .aviso-ok .aviso-ico { background: var(--accent); color: var(--on-accent); font-weight: 800; }
 .aviso-caja b { display: block; font-family: var(--font-display); font-size: 18px; font-weight: 700; }
@@ -1294,7 +1301,9 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 @keyframes avisoIn  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes avisoOut { to { opacity: 0; } }
-@keyframes avisoPop { 0% { transform: scale(0); } 60% { transform: scale(1.1); } 100% { transform: scale(1); } }
+/* Sobrepaso de 1.1 a 1.04: esto dice "tu solicitud quedó enviada, falta que la
+   acepten". No es un festejo, y rebotar tanto le ponía un tono que no le toca. */
+@keyframes avisoPop { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); } }
 
 /* Formato del recibo al compartir */
 .share-format { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; padding: 4px; background: var(--surface-2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
@@ -1306,6 +1315,33 @@ button { -webkit-tap-highlight-color: transparent; }
 /* =========================================================
    Reduced motion
    ========================================================= */
+/* Movimiento reducido es "menos y más suave", no "nada": el fundido que anuncia
+   un toast, el borde que se enciende al enfocar un campo o la barra que crece
+   con el consumo ayudan a entender qué pasó, y se quedan. Lo que se va es el
+   desplazamiento y todo lo que late sin que nadie lo haya pedido. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  /* Esto va primero y a cero. Con `backwards`, un retardo que sobreviva deja el
+     elemento invisible aunque su animación ya no dure nada: era el peor de los
+     dos mundos —quien pedía menos movimiento se quedaba mirando una lista en
+     blanco—. Los retardos de las gráficas se ponen en línea desde JS, así que
+     hay que pisarlos con !important. */
+  *, *::before, *::after { animation-delay: 0ms !important; }
+  .chart-bar, .chart-val, .chart-line, .chart-area { transition-delay: 0ms !important; }
+
+  /* Lo que aparece se anuncia con un fundido, sin viajar hasta su sitio */
+  .view, .details-body, .stagger, .toast, .sheet-panel,
+  .aviso-centro, .aviso-ico, .overlay-backdrop, .sheet-backdrop {
+    animation: fadeIn 150ms ease-out !important;
+  }
+  .toast.is-out, .aviso-centro.is-out { animation: avisoOut 150ms ease-out forwards !important; }
+  .result-panel { transform: none !important; transition: opacity 150ms ease-out !important; }
+
+  /* Nada que lata, gire, flote o chispee por su cuenta */
+  .pulse-dot, .charge-console.is-charging .cc-dot,
+  .metric-card.stagger::after, .stagger .rank-bar i,
+  .m-led, .m-led-halo, .m-port-core, .m-car,
+  .scene.charging #cableFlow, .scene.charging #wbLed, .scene.charging #wbLedHalo,
+  .scene.charging #portCore, .scene.charging .port-halo,
+  .scene.moving #speedLines line { animation: none !important; }
+  .scene.charging #sparks { opacity: 0 !important; }
 }

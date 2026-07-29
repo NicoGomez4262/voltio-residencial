@@ -2071,7 +2071,7 @@
     const inp = readInputs(), kwh = inp.kwh > 0 ? inp.kwh : 0;
     const cost = Math.max(0, kwh * settings.pricePerKwh + inp.serviceFee - inp.discount);
     $('#liveKwh').textContent = fmtKwh(kwh); $('#liveCost').textContent = fmtCOP(cost);
-    $('#liveBar').style.width = clamp(kwh / 60 * 100, 0, 100) + '%';
+    $('#liveBar').style.transform = 'scaleX(' + (clamp(kwh / 60, 0, 1)).toFixed(4) + ')';
   }
   // ---- Animación ----
   const anim = { timers: [], running: [] };
