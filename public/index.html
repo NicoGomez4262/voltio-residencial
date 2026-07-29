@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Exo+2:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="/css/styles.css?v=2.8.2" />
+  <link rel="stylesheet" href="/css/styles.css?v=2.8.3" />
 
   <style>
   /* ---------- Bienvenida (crítico: va incrustado para pintarse al instante) ---------- */
@@ -521,7 +521,8 @@
             <svg class="chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
             Detalles (opcional)
           </button>
-          <div id="detailsBody" class="details-body hidden">
+          <div id="detailsBody" class="details-body">
+            <div class="details-inner">
             <div class="grid-2">
               <div class="field"><label for="driverName">Vecino</label><div class="input-wrap"><input id="driverName" type="text" autocomplete="off" placeholder="Ej: Ana"/></div></div>
               <div class="field"><label for="carModel">Vehículo</label><div class="input-wrap"><input id="carModel" type="text" autocomplete="off" placeholder="Ej: BYD Dolphin"/></div></div>
@@ -541,6 +542,7 @@
               <label for="calcBooking">¿Es de una reserva? <span class="opt">(opcional)</span></label>
               <div class="input-wrap select-wrap"><select id="calcBooking"><option value="">No, es una carga suelta</option></select></div>
               <p class="hint">Al vincularla, la reserva queda <b>completada</b> con los kWh reales y el conjunto no la cuenta dos veces.</p>
+            </div>
             </div>
           </div>
           <button id="calcBtn" class="btn-primary" type="button"><span class="btn-glow"></span>
@@ -714,7 +716,7 @@
           <div class="data-actions"><button id="exportBtn2" class="btn-ghost" type="button">Exportar recibos (CSV)</button><button id="resetBtn" class="btn-ghost btn-danger" type="button">Restablecer datos locales</button></div>
         </div>
 
-        <p class="version">Voltio Residencial v2.8.2 · Piloto conjunto MontReal ⚡</p>
+        <p class="version">Voltio Residencial v2.8.3 · Piloto conjunto MontReal ⚡</p>
       </section>
 
       <!-- ============ ADMIN: PANEL ============ -->
@@ -1064,11 +1066,11 @@
     </defs>
   </svg>
 
-  <script type="module" src="/js/backend.js?v=2.8.2"></script>
-  <script defer src="/js/reporte.js?v=2.8.2"></script>
-  <script defer src="/js/wompi.js?v=2.8.2"></script>
-  <script defer src="/js/recibo.js?v=2.8.2"></script>
-  <script defer src="/js/ocr.js?v=2.8.2"></script>
-  <script defer src="/js/app.js?v=2.8.2"></script>
+  <script type="module" src="/js/backend.js?v=2.8.3"></script>
+  <script defer src="/js/reporte.js?v=2.8.3"></script>
+  <script defer src="/js/wompi.js?v=2.8.3"></script>
+  <script defer src="/js/recibo.js?v=2.8.3"></script>
+  <script defer src="/js/ocr.js?v=2.8.3"></script>
+  <script defer src="/js/app.js?v=2.8.3"></script>
 </body>
 </html>

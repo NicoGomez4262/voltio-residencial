@@ -1,6 +1,6 @@
 {
   "name": "voltio-carga-compartida",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "private": true,
   "description": "El Airbnb de los cargadores: red de carga compartida para vehículos eléctricos en Colombia. PWA con mapa real, reservas, chat y calculadora de cobro en COP.",
   "type": "commonjs",

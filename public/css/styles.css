@@ -171,10 +171,10 @@ body[data-accent="pink"]   { --accent:#e878b8; --accent-rgb:232,120,184; --accen
   font-size: 12.5px; font-weight: 600; color: var(--text-dim);
   padding: 7px 12px; border-radius: 999px;
   background: var(--surface-2); border: 1px solid var(--border);
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
 }
 .price-chip svg { color: var(--accent); }
-.price-chip:hover { color: var(--text); border-color: var(--border-strong); }
+@media (hover: hover) and (pointer: fine) { .price-chip:hover { color: var(--text); border-color: var(--border-strong); } }
 #priceChipValue { font-variant-numeric: tabular-nums; color: var(--text); }
 
 /* ---------- Segmented ---------- */
@@ -184,10 +184,31 @@ body[data-accent="pink"]   { --accent:#e878b8; --accent-rgb:232,120,184; --accen
   padding: 3px; border-radius: var(--radius-sm); margin-bottom: 16px;
 }
 .seg-3 { grid-template-columns: repeat(3, 1fr); }
+/* La pastilla del segmento activo se desliza en vez de saltar de un lado al
+   otro. Se mueve dentro de la pantalla, así que acelera y frena (ease-in-out).
+   Quien la coloca es :has(), no el JS: así sigue al .is-active se ponga donde
+   se ponga, sin tocar ninguno de los sitios que lo alternan. */
+.segmented { position: relative; }
+.segmented::before {
+  content: ''; position: absolute; z-index: 0;
+  top: 3px; bottom: 3px; left: 3px;
+  width: calc((100% - 9px) / 2);
+  border-radius: 9px; background: var(--surface-3);
+  transition: transform var(--dur-ui) var(--ease-in-out);
+}
+.segmented:has(.seg-btn:nth-child(2).is-active)::before { transform: translateX(calc(100% + 3px)); }
+.seg-3::before { width: calc((100% - 12px) / 3); }
+.seg-3:has(.seg-btn:nth-child(3).is-active)::before { transform: translateX(calc(200% + 6px)); }
+/* Sin :has() no pasa nada malo: la pastilla se queda quieta y el fondo del
+   botón activo sigue marcando cuál es. */
+@supports selector(:has(*)) {
+  .seg-btn.is-active { background: none; }
+}
+.seg-btn { position: relative; z-index: 1; }
 .seg-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   padding: 10px 8px; border-radius: 9px; font-size: 13px; font-weight: 600;
-  color: var(--text-mute); transition: color 0.18s, background 0.18s;
+  color: var(--text-mute); transition: color var(--dur-fast), background var(--dur-fast);
 }
 .seg-btn svg { opacity: 0.75; }
 .seg-btn.is-active { color: var(--text); background: var(--surface-3); }
@@ -206,7 +227,7 @@ body[data-accent="pink"]   { --accent:#e878b8; --accent-rgb:232,120,184; --accen
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  transition: border-color 0.18s;
+  transition: border-color var(--dur-fast);
 }
 .input-wrap:focus-within { border-color: rgba(var(--accent-rgb), 0.6); }
 .input-wrap input {
@@ -255,9 +276,17 @@ textarea {
   font-size: 13px; font-weight: 600; color: var(--text-dim);
   padding: 16px 0 8px;
 }
-.details-toggle .chev { transition: transform 0.25s; }
+/* Se mueve dentro de la pantalla: acelera y frena */
+.details-toggle .chev { transition: transform var(--dur-ui) var(--ease-in-out); }
 .details-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
-.details-body { padding-top: 4px; display: grid; gap: 14px; animation: viewIn 180ms var(--ease-out); }
+/* Se despliega Y se pliega. Antes solo animaba al abrir —al cerrar teleportaba—
+   y, al ser un keyframe, alternarlo rápido lo reiniciaba desde cero. De 0fr a
+   1fr es la forma de animar un alto que no se conoce de antemano. */
+.details-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 240ms var(--ease-out); }
+.details-body.is-open { grid-template-rows: 1fr; }
+/* Sin padding propio: cualquier relleno aquí no colapsa con la fila a 0fr y
+   dejaba un hueco visible con el bloque cerrado. El aire lo pone el botón. */
+.details-inner { overflow: hidden; min-height: 0; display: grid; gap: 14px; }
 
 /* ---------- Botones ---------- */
 .btn-primary {
@@ -267,31 +296,31 @@ textarea {
   padding: 15px; border-radius: var(--radius-sm);
   font-size: 15.5px; font-weight: 700; letter-spacing: 0.2px;
   color: var(--on-accent); background: var(--accent);
-  transition: transform 0.12s, filter 0.2s;
+  transition: transform var(--dur-press) var(--ease-out), filter var(--dur-fast);
 }
-.btn-primary:hover { filter: brightness(1.06); }
+@media (hover: hover) and (pointer: fine) { .btn-primary:hover { filter: brightness(1.06); } }
 .btn-primary:active { transform: scale(0.985); }
 .btn-glow { display: none; }
 
 .btn-secondary {
   padding: 13px 18px; border-radius: var(--radius-sm); font-weight: 600; font-size: 14.5px;
   color: var(--text); background: var(--surface-3); border: 1px solid var(--border-strong);
-  transition: transform 0.12s, background 0.18s;
+  transition: transform var(--dur-press) var(--ease-out), background var(--dur-fast);
 }
-.btn-secondary:hover { background: var(--surface-2); }
+@media (hover: hover) and (pointer: fine) { .btn-secondary:hover { background: var(--surface-2); } }
 .btn-secondary:active { transform: scale(0.98); }
 .btn-ghost {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   padding: 11px 15px; border-radius: var(--radius-sm); font-weight: 600; font-size: 13.5px;
   color: var(--text-dim); background: transparent; border: 1px solid var(--border);
-  transition: color 0.18s, border-color 0.18s;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
 }
-.btn-ghost:hover { color: var(--text); border-color: var(--border-strong); }
+@media (hover: hover) and (pointer: fine) { .btn-ghost:hover { color: var(--text); border-color: var(--border-strong); } }
 .btn-ghost:active { transform: scale(0.98); }
 .btn-sm { padding: 8px 12px; font-size: 12.5px; border-radius: 9px; }
 .btn-block { width: 100%; }
 .btn-danger { color: var(--danger); border-color: rgba(var(--danger-rgb),0.3); }
-.btn-danger:hover { color: var(--danger); border-color: rgba(var(--danger-rgb),0.6); background: rgba(var(--danger-rgb),0.07); }
+@media (hover: hover) and (pointer: fine) { .btn-danger:hover { color: var(--danger); border-color: rgba(var(--danger-rgb),0.6); background: rgba(var(--danger-rgb),0.07); } }
 .btn-ok { color: var(--on-accent); font-weight: 700; background: var(--accent); border: none; border-radius: var(--radius-sm); }
 .btn-ok:active { transform: scale(0.98); }
 .form-error { margin-top: 12px; font-size: 13px; color: var(--danger); text-align: center; font-weight: 500; }
@@ -342,9 +371,9 @@ textarea {
 .chip {
   padding: 8px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-dim);
   background: var(--surface-2); border: 1px solid var(--border);
-  transition: color 0.15s, border-color 0.15s, background 0.15s; font-variant-numeric: tabular-nums;
+  transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast); font-variant-numeric: tabular-nums;
 }
-.chip:hover { color: var(--text); border-color: var(--border-strong); }
+@media (hover: hover) and (pointer: fine) { .chip:hover { color: var(--text); border-color: var(--border-strong); } }
 .chip:active { transform: scale(0.96); }
 .chip.is-active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 .chips-scroll { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -368,12 +397,12 @@ textarea {
   font-size: 13px; font-weight: 600; color: var(--text);
 }
 .ta-clear { font-size: 12px; font-weight: 600; color: var(--text-mute); padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); }
-.ta-clear:hover { color: var(--text-dim); }
+@media (hover: hover) and (pointer: fine) { .ta-clear:hover { color: var(--text-dim); } }
 
 /* ---------- Acentos / switches ---------- */
 .accent-row { display: flex; gap: 12px; margin: 12px 0 4px; }
-.accent-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--c); position: relative; transition: transform 0.15s; opacity: 0.75; }
-.accent-dot:hover { opacity: 1; }
+.accent-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--c); position: relative; transition: transform var(--dur-press) var(--ease-out); opacity: 0.75; }
+@media (hover: hover) and (pointer: fine) { .accent-dot:hover { opacity: 1; } }
 .accent-dot.is-active { opacity: 1; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--c); }
 .accent-dot.is-active::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--on-accent); font-weight: 800; font-size: 13px; }
 
@@ -404,7 +433,7 @@ textarea {
   flex: 1; position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 7px 0; border-radius: 10px; font-size: 10.5px; font-weight: 600;
-  color: var(--text-mute); transition: color 0.18s;
+  color: var(--text-mute); transition: color var(--dur-fast);
 }
 .nav-btn.nav-hidden { display: none; }
 .nav-btn svg { width: 21px; height: 21px; }
@@ -490,7 +519,7 @@ textarea {
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
   padding: 22px 20px;
   transform: translateY(24px); opacity: 0; pointer-events: none;
-  transition: transform 0.45s cubic-bezier(0.2,0.8,0.2,1), opacity 0.45s;
+  transition: transform 400ms var(--ease-out), opacity 400ms var(--ease-out);
 }
 .result-panel.is-visible { transform: none; opacity: 1; pointer-events: auto; }
 .result-total { text-align: center; margin-bottom: 20px; }
@@ -558,8 +587,11 @@ textarea {
 #sparks { opacity: 0; }
 #portRing { opacity: 0.3; }
 .wheel-spin { transform-box: fill-box; transform-origin: center; }
-#evCar { transform-box: view-box; will-change: transform; }
-#carBodyGrp { transform-box: fill-box; transform-origin: 50% 62%; will-change: transform; }
+/* will-change se pone desde JS justo antes de animar y se quita al cerrar: en
+   CSS estático mantenía viva una capa de composición para algo que solo se
+   mueve dentro de un overlay que casi siempre está cerrado. */
+#evCar { transform-box: view-box; }
+#carBodyGrp { transform-box: fill-box; transform-origin: 50% 62%; }
 
 .scene.charging #cableFlow { opacity: 1; animation: flow 0.8s linear infinite; }
 .scene.charging #wbLed, .scene.charging #wbLedHalo { animation: softPulse 1s ease-in-out infinite; }
@@ -600,9 +632,9 @@ textarea {
   display: flex; flex-direction: column; align-items: center; gap: 7px;
   padding: 12px 4px 10px; border-radius: var(--radius-sm);
   background: var(--surface-2); border: 1px solid var(--border);
-  transition: border-color 0.18s, background 0.18s;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
 }
-.veh-btn .veh-sil { fill: var(--text-mute); transition: fill 0.18s; }
+.veh-btn .veh-sil { fill: var(--text-mute); transition: fill var(--dur-fast); }
 .veh-btn .veh-wheel { fill: var(--surface-3); }
 .veh-btn .veh-rack { stroke: var(--text-mute); stroke-width: 1.6; stroke-linecap: round; }
 .veh-btn span { font-size: 10.5px; font-weight: 600; color: var(--text-mute); }
@@ -629,9 +661,10 @@ textarea {
   display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
   padding: 17px; border-radius: var(--radius);
   background: var(--surface); border: 1px solid var(--border);
-  transition: border-color 0.18s, background 0.18s;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
 }
-.role-card:hover, .role-card:focus-visible { border-color: var(--accent); background: var(--surface-2); }
+.role-card:focus-visible { border-color: var(--accent); background: var(--surface-2); }
+@media (hover: hover) and (pointer: fine) { .role-card:hover { border-color: var(--accent); background: var(--surface-2); } }
 .role-card:active { transform: scale(0.985); }
 .role-ico { font-size: 27px; }
 .role-txt b { display: block; font-size: 15.5px; font-weight: 700; }
@@ -650,7 +683,7 @@ textarea {
 .leaflet-control-attribution { background: rgba(10,12,17,0.75) !important; color: var(--text-mute) !important; font-size: 9px !important; }
 .leaflet-control-attribution a { color: var(--text-mute) !important; }
 .leaflet-control-zoom a { background: var(--surface) !important; color: var(--text-dim) !important; border-color: var(--border) !important; }
-.leaflet-control-zoom a:hover { color: var(--text) !important; }
+@media (hover: hover) and (pointer: fine) { .leaflet-control-zoom a:hover { color: var(--text) !important; } }
 .leaflet-bar { border: 1px solid var(--border) !important; box-shadow: none !important; }
 
 .locate-btn {
@@ -697,9 +730,9 @@ textarea {
 .spot-list { display: grid; gap: 10px; margin-bottom: 14px; }
 .spot-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px; cursor: pointer; transition: border-color 0.18s;
+  padding: 16px; cursor: pointer; transition: border-color var(--dur-fast);
 }
-.spot-card:hover { border-color: var(--border-strong); }
+@media (hover: hover) and (pointer: fine) { .spot-card:hover { border-color: var(--border-strong); } }
 .spot-card:active { transform: scale(0.995); }
 .sc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sc-name { font-size: 15px; font-weight: 700; }
@@ -785,6 +818,14 @@ textarea {
    ========================================================= */
 .book-list { display: grid; gap: 10px; }
 .book-card { padding: 15px 16px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
+/* Que una solicitud pase de "Pendiente" a "Aceptada" es lo que el vecino está
+   esperando, y la tarjeta cambiaba la insignia de golpe, sin decir nada. Un
+   realce corto marca cuál acaba de moverse, sin robarle la atención al resto. */
+.book-card.recien-cambiada { animation: realce 900ms var(--ease-out); }
+@keyframes realce {
+  0%   { background: rgba(var(--accent-rgb), 0.16); border-color: rgba(var(--accent-rgb), 0.45); }
+  100% { background: var(--surface-2); border-color: var(--border); }
+}
 .bk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .bk-name { font-size: 14.5px; font-weight: 700; }
 .bk-sub { font-size: 12px; color: var(--text-mute); margin-top: 3px; }
@@ -826,9 +867,9 @@ textarea {
   width: 74px; height: 74px; border-radius: var(--radius-sm); display: grid; place-items: center;
   font-size: 24px; color: var(--text-mute); cursor: pointer;
   background: var(--surface-2); border: 1px dashed var(--border-strong);
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
 }
-.foto-add:hover { color: var(--accent); border-color: var(--accent); }
+@media (hover: hover) and (pointer: fine) { .foto-add:hover { color: var(--accent); border-color: var(--accent); } }
 .foto-thumb { position: relative; width: 74px; height: 74px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
 .foto-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .foto-del {
@@ -847,9 +888,9 @@ textarea {
 .g-btn {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
   padding: 13px; border-radius: var(--radius-sm); font-size: 14.5px; font-weight: 600; color: #1f1f1f;
-  background: #fff; transition: transform 0.12s, filter 0.18s;
+  background: #fff; transition: transform var(--dur-press) var(--ease-out), filter var(--dur-fast);
 }
-.g-btn:hover { filter: brightness(0.96); }
+@media (hover: hover) and (pointer: fine) { .g-btn:hover { filter: brightness(0.96); } }
 .g-btn:active { transform: scale(0.985); }
 .lg-div { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--text-mute); font-size: 12px; }
 .lg-div::before, .lg-div::after { content: ""; flex: 1; height: 1px; background: var(--border); }
@@ -894,7 +935,7 @@ textarea {
    Calificaciones
    ========================================================= */
 .stars-row { display: flex; gap: 6px; justify-content: center; }
-.star-btn { font-size: 32px; color: var(--surface-3); transition: color 0.12s, transform 0.12s; padding: 2px 4px; }
+.star-btn { font-size: 32px; color: var(--surface-3); transition: color 0.12s, transform var(--dur-press) var(--ease-out); padding: 2px 4px; }
 .star-btn.on { color: var(--warn); }
 .star-btn:active { transform: scale(1.15); }
 .rv-item { padding: 11px 0; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-dim); line-height: 1.5; }
@@ -919,7 +960,7 @@ textarea {
 .chart-axis { font-size: 9px; fill: var(--text-mute); }
 .chart-bar {
   transform: scaleY(0); transform-box: fill-box; transform-origin: bottom;
-  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); cursor: pointer;
+  transition: transform 600ms var(--ease-out); cursor: pointer;
 }
 .chart-in .chart-bar { transform: scaleY(1); }
 .chart-bar.bar-zero { cursor: default; }
@@ -982,7 +1023,7 @@ textarea {
   #liveMap { height: 460px; }
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .nav-btn:not(.is-active):hover { color: var(--text-dim); }
 }
 
@@ -1024,10 +1065,14 @@ textarea {
 .cal-card { }
 .cal-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
 .cal-arrow { width: 32px; height: 32px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); font-size: 18px; color: var(--text-dim); line-height: 1; }
-.cal-arrow:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) { .cal-arrow:hover { color: var(--text); } }
 .cal-range { font-size: 13px; font-weight: 600; min-width: 150px; text-align: center; }
 .calendar { }
-.cal-grid { display: flex; gap: 5px; }
+/* Cambiar de semana ya no teleporta: el contenido entra por el lado del que
+   vienes. Tocar "siguiente" lo trae desde la derecha —contrario a la flecha,
+   como si la semana nueva llegara empujando a la vieja—. */
+.cal-grid { display: flex; gap: 5px; animation: calIn 180ms var(--ease-out); }
+@keyframes calIn { from { opacity: 0; transform: translateX(var(--cal-dir, 0px)); } to { opacity: 1; transform: none; } }
 .cal-times { position: relative; width: 24px; flex-shrink: 0; margin-top: 26px; height: 300px; }
 .cal-times span { position: absolute; right: 1px; transform: translateY(-50%); font-size: 9px; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .cal-days { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; min-width: 0; }
@@ -1067,9 +1112,9 @@ textarea {
   position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 50%;
   display: grid; place-items: center; font-size: 12px; line-height: 1;
   color: #fff; background: rgba(10,12,17,0.72); border: 1px solid rgba(255,255,255,0.22);
-  backdrop-filter: blur(6px); transition: transform 0.12s, background 0.18s;
+  backdrop-filter: blur(6px); transition: transform var(--dur-press) var(--ease-out), background var(--dur-fast);
 }
-.foto-del:hover { background: rgba(var(--danger-rgb), 0.85); }
+@media (hover: hover) and (pointer: fine) { .foto-del:hover { background: rgba(var(--danger-rgb), 0.85); } }
 .foto-del:active { transform: scale(0.9); }
 .foto-strip {
   display: flex; gap: 8px; overflow-x: auto; margin: 0 0 14px;
@@ -1081,8 +1126,8 @@ textarea {
 }
 .sub-h { font-size: 12.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; margin: 18px 0 12px; }
 .reason-list { display: grid; gap: 8px; width: 100%; }
-.reason-btn { text-align: left; padding: 13px 15px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font-size: 14px; color: var(--text); transition: border-color 0.15s; }
-.reason-btn:hover { border-color: var(--border-strong); }
+.reason-btn { text-align: left; padding: 13px 15px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font-size: 14px; color: var(--text); transition: border-color var(--dur-fast); }
+@media (hover: hover) and (pointer: fine) { .reason-btn:hover { border-color: var(--border-strong); } }
 .reason-btn.on { border-color: var(--accent); background: var(--surface-3); }
 .bk-pay.p-rej { background: rgba(var(--danger-rgb), 0.07); border-color: rgba(var(--danger-rgb), 0.3); color: var(--text-dim); }
 .bk-pay.bk-paid { background: rgba(var(--accent-2-rgb), 0.09); border-color: rgba(var(--accent-2-rgb), 0.34); color: var(--text-dim); }
@@ -1157,15 +1202,15 @@ textarea {
 /* =========================================================
    v2.3 — Pago Bre-B / QR
    ========================================================= */
-.qr-drop { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 20px; border-radius: var(--radius-sm); border: 1px dashed var(--border-strong); background: var(--surface-2); color: var(--text-dim); transition: border-color 0.18s, background 0.18s, transform 0.12s; }
-.qr-drop:hover { border-color: var(--accent); }
+.qr-drop { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 20px; border-radius: var(--radius-sm); border: 1px dashed var(--border-strong); background: var(--surface-2); color: var(--text-dim); transition: border-color var(--dur-fast), background var(--dur-fast), transform var(--dur-press) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .qr-drop:hover { border-color: var(--accent); } }
 .qr-drop:active { transform: scale(0.98); }
 .qr-ico { font-size: 26px; }
 .qr-drop-main { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .qr-drop small { font-size: 11px; color: var(--text-mute); text-align: center; }
 .qr-preview { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .qr-preview img { width: 172px; height: 172px; object-fit: contain; border-radius: var(--radius-sm); background: #fff; padding: 8px; }
-.qr-remove { font-size: 12.5px; color: var(--danger); padding: 6px 13px; border-radius: 999px; border: 1px solid rgba(var(--danger-rgb),0.3); transition: transform 0.12s; }
+.qr-remove { font-size: 12.5px; color: var(--danger); padding: 6px 13px; border-radius: 999px; border: 1px solid rgba(var(--danger-rgb),0.3); transition: transform var(--dur-press) var(--ease-out); }
 .qr-remove:active { transform: scale(0.95); }
 .qr-view { text-align: center; padding: 4px 4px 8px; }
 .qr-view-head { margin-bottom: 14px; }
@@ -1181,9 +1226,9 @@ textarea {
    v2.3 — Micro-interacciones y animaciones
    ========================================================= */
 button { -webkit-tap-highlight-color: transparent; }
-.chip, .seg-btn, .btn-ok, .reason-btn, .accent-dot, .veh-btn, .role-card, .user-manage, .cal-arrow, .price-chip, .qr-remove { transition: transform 0.12s ease, background 0.18s, border-color 0.18s, color 0.18s; }
+.chip, .seg-btn, .btn-ok, .reason-btn, .accent-dot, .veh-btn, .role-card, .user-manage, .cal-arrow, .price-chip, .qr-remove { transition: transform var(--dur-press) var(--ease-out), background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast); }
 .chip:active, .seg-btn:active, .btn-ok:active, .reason-btn:active, .veh-btn:active, .role-card:active, .user-manage:active, .nav-btn:active, .star-btn:active, .accent-dot:active { transform: scale(0.95); }
-.btn-ghost { transition: transform 0.12s ease, color 0.15s, border-color 0.15s, background 0.15s; }
+.btn-ghost { transition: transform var(--dur-press) var(--ease-out), color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast); }
 .btn-ghost:active { transform: scale(0.96); }
 
 /* Entrada escalonada de listas
@@ -1320,7 +1365,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .aviso-centro {
   position: fixed; inset: 0; z-index: 320; display: grid; place-items: center;
   padding: 24px; background: rgba(8,10,15,0.72); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
-  animation: avisoIn 0.28s cubic-bezier(.2,.8,.3,1);
+  animation: avisoIn 280ms var(--ease-out);
 }
 .aviso-centro.is-out { animation: avisoOut 0.3s ease forwards; }
 .aviso-caja {
@@ -1373,9 +1418,13 @@ button { -webkit-tap-highlight-color: transparent; }
   .chart-bar, .chart-val, .chart-line, .chart-area { transition-delay: 0ms !important; }
 
   /* Lo que aparece se anuncia con un fundido, sin viajar hasta su sitio */
-  .view, .details-body, .stagger, .aviso-centro, .aviso-ico {
+  .view, .stagger, .aviso-centro, .aviso-ico, .cal-grid {
     animation: fadeIn 150ms ease-out !important;
   }
+  /* Se abre y se cierra, pero de una: el aviso lo da el chevrón */
+  .details-body { transition: none !important; }
+  /* La pastilla del segmento aparece donde toca, sin deslizarse */
+  .segmented::before { transition: none !important; }
   .aviso-centro.is-out { animation: avisoOut 150ms ease-out forwards !important; }
   .result-panel { transform: none !important; transition: opacity 150ms ease-out !important; }
   /* Estos ya se mueven con transiciones: se les quita el viaje, no el aviso */

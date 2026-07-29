@@ -63,6 +63,19 @@
      haría parpadear justo lo que está leyendo. Por eso se pregunta ANTES de vaciar. */
   const vaEscalonada = (ul) => !ul.firstElementChild;
   const escalonar = (el, i, on) => { if (on) { el.classList.add('stagger'); el.style.setProperty('--i', i); } return el; };
+  /* Que una solicitud pase de "Pendiente" a "Aceptada" es el momento que el
+     vecino está esperando, y hasta ahora la tarjeta se reconstruía entera y la
+     insignia cambiaba de golpe, sin decir nada. Guardamos el estado anterior
+     para realzar solo la tarjeta que de verdad cambió —no todas, ni la primera
+     vez que se dibuja la lista—. */
+  const estadoPrevio = new Map();
+  function marcarCambio(el, id, estado) {
+    if (!id) return el;
+    const antes = estadoPrevio.get(id);
+    estadoPrevio.set(id, estado);
+    if (antes !== undefined && antes !== estado) el.classList.add('recien-cambiada');
+    return el;
+  }
   const round2 = (n) => Math.round((n || 0) * 100) / 100;
   const uid8 = (p) => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const tsDate = (ts) => (ts && ts.seconds ? new Date(ts.seconds * 1000) : new Date());
@@ -1039,7 +1052,7 @@
     $('#bookEmpty').classList.toggle('hidden', myBookings.length > 0);
     myBookings.forEach((bk, i) => {
       const [cls, lab] = PILL[bk.estado] || ['p-dim', bk.estado];
-      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc);
+      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc); marcarCambio(li, bk.id, bk.estado);
       const fx = parseYmd(bk.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(bk.stationName)}</div><div class="bk-sub">de ${escapeHtml(bk.ownerName || '')} · Torre ${escapeHtml(bk.torre || '—')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
@@ -1109,7 +1122,7 @@
     if (emptySel) $(emptySel).classList.toggle('hidden', list.length > 0);
     list.forEach((rq, i) => {
       const [cls, lab] = { pendiente: ['p-pend', 'Pendiente'], confirmada: ['p-ok', 'Aceptada'], rechazada: ['p-no', 'Declinada'], completada: ['p-dim', 'Completada'], cancelada: ['p-dim', 'Cancelada'] }[rq.estado] || ['p-dim', rq.estado];
-      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc);
+      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc); marcarCambio(li, rq.id, rq.estado);
       const fx = parseYmd(rq.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(rq.driverName || 'Vecino')}</div><div class="bk-sub">quiere ${escapeHtml(rq.stationName || 'tu puesto')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
@@ -1145,8 +1158,10 @@
   /* =========================================================
      Calendario tipo Teams
      ========================================================= */
-  function renderCalendar(sel, bookings, role) {
+  function renderCalendar(sel, bookings, role, dir) {
     const el = $(sel); if (!el) return;
+    // Sin flecha de por medio (un re-dibujo cualquiera) el calendario solo funde
+    el.style.setProperty('--cal-dir', (dir ? (dir > 0 ? 14 : -14) : 0) + 'px');
     const ws = addDays(mondayOf(new Date()), calOffset[role] * 7);
     const we = addDays(ws, 6);
     const lbl = ws.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) + ' – ' + we.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
@@ -2109,6 +2124,7 @@
     const ENTER = 1150, CHARGE = 2100;
     scene.classList.add('moving');
     const wheels = startWheels(480); anim.running.push.apply(anim.running, wheels);
+    car.style.willChange = 'transform'; body.style.willChange = 'transform';
     anim.running.push(car.animate([{ transform: 'translateX(-560px)' }, { transform: 'translateX(14px)', offset: 0.84 }, { transform: 'translateX(0px)' }], { duration: 1100, easing: 'cubic-bezier(.17,.84,.28,1)', fill: 'forwards' }));
     anim.running.push(body.animate([{ transform: 'rotate(0) translateY(0)' }, { transform: 'rotate(0) translateY(0)', offset: 0.6 }, { transform: 'rotate(1.6deg) translateY(2px)', offset: 0.8 }, { transform: 'rotate(-0.6deg) translateY(-1px)', offset: 0.92 }, { transform: 'rotate(0) translateY(0)' }], { duration: 1150, easing: 'ease-out' }));
     anim.timers.push(setTimeout(() => {
@@ -2149,6 +2165,7 @@
     o._reset = setTimeout(() => {
       $('.scene-holder').classList.remove('flash');
       $('#evCar').style.transform = 'translateX(0)';
+      $('#evCar').style.willChange = ''; $('#carBodyGrp').style.willChange = '';
       setBattery(100);
     }, 200);
   }
@@ -2357,7 +2374,7 @@
     let d = 'M ' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
     for (let i = 1; i < pts.length; i++) { const p0 = pts[i - 1], p1 = pts[i], mx = (p0.x + p1.x) / 2; d += ' C ' + mx.toFixed(1) + ' ' + p0.y.toFixed(1) + ', ' + mx.toFixed(1) + ' ' + p1.y.toFixed(1) + ', ' + p1.x.toFixed(1) + ' ' + p1.y.toFixed(1); }
     const area = svgEl('path', { d: d + ' L ' + pts[pts.length - 1].x.toFixed(1) + ' ' + Y1 + ' L ' + pts[0].x.toFixed(1) + ' ' + Y1 + ' Z', class: 'chart-area' }); svg.appendChild(area);
-    const line = svgEl('path', { d, class: 'chart-line' }); line.style.strokeDasharray = 900; line.style.strokeDashoffset = 900; line.style.transition = 'stroke-dashoffset 1.1s cubic-bezier(.3,.7,.3,1)'; svg.appendChild(line);
+    const line = svgEl('path', { d, class: 'chart-line' }); line.style.strokeDasharray = 900; line.style.strokeDashoffset = 900; line.style.transition = 'stroke-dashoffset 1.1s var(--ease-out)'; svg.appendChild(line);
     area.style.opacity = '0'; area.style.transition = 'opacity 0.8s ease 0.3s';
     pts.forEach((p, i) => {
       const dot = svgEl('circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 3.5, class: 'chart-dot chart-val' }); dot.style.transitionDelay = (i * 60 + 300) + 'ms'; svg.appendChild(dot);
@@ -2570,7 +2587,12 @@
     });
 
     // Calendario nav
-    $$('.cal-arrow').forEach((b) => b.addEventListener('click', () => { calOffset[b.dataset.cal] += +b.dataset.dir; if (b.dataset.cal === 'driver') renderCalendar('#calDriver', myBookings, 'driver'); else renderCalendar('#calHost', myRequests, 'host'); }));
+    $$('.cal-arrow').forEach((b) => b.addEventListener('click', () => {
+      const dir = +b.dataset.dir;
+      calOffset[b.dataset.cal] += dir;
+      if (b.dataset.cal === 'driver') renderCalendar('#calDriver', myBookings, 'driver', dir);
+      else renderCalendar('#calHost', myRequests, 'host', dir);
+    }));
 
     // Novedades
     $('#notifEnable').addEventListener('click', requestNotifPermission);
@@ -2660,7 +2682,7 @@
     $$('.seg-btn[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
     ['#readingStart', '#readingEnd', '#directKwh', '#serviceFee', '#discount'].forEach((s) => $(s).addEventListener('input', updateLive));
     $$('#view-analisis input').forEach((el) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && el.closest('.card') === $('#calcBtn').closest('.card')) { e.preventDefault(); doCalc(); } }));
-    $('#detailsToggle').addEventListener('click', () => { const body = $('#detailsBody'); const open = body.classList.toggle('hidden') === false; $('#detailsToggle').setAttribute('aria-expanded', String(open)); });
+    $('#detailsToggle').addEventListener('click', () => { const open = $('#detailsBody').classList.toggle('is-open'); $('#detailsToggle').setAttribute('aria-expanded', String(open)); });
     $('#priceChip').addEventListener('click', () => { goView('settings'); setTimeout(() => $('#setPrice').focus(), 350); });
     $('#calcBtn').addEventListener('click', doCalc);
     $('#skipBtn').addEventListener('click', () => { if (lastCalc) skipToResult(lastCalc); });
