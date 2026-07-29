@@ -56,6 +56,13 @@
   const fmtNum = (n, d = 0) => (n || 0).toLocaleString('es-CO', { maximumFractionDigits: d });
   const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const debounce = (fn, ms) => { let t; return function () { clearTimeout(t); t = setTimeout(fn, ms); }; };
+  /* El escalonado de listas es adorno, y el adorno no puede estorbar: solo entra
+     cuando la lista se llena estando vacía. En un re-dibujo —una tecla en el
+     buscador, un cambio que llega de Firestore mientras el vecino lee— repetirlo
+     haría parpadear justo lo que está leyendo. Por eso se pregunta ANTES de vaciar. */
+  const vaEscalonada = (ul) => !ul.firstElementChild;
+  const escalonar = (el, i, on) => { if (on) { el.classList.add('stagger'); el.style.setProperty('--i', i); } return el; };
   const round2 = (n) => Math.round((n || 0) * 100) / 100;
   const uid8 = (p) => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const tsDate = (ts) => (ts && ts.seconds ? new Date(ts.seconds * 1000) : new Date());
@@ -222,7 +229,10 @@
     if (name === 'settings') { renderAuthUI(); loadProfileUI(); loadAdminSettingsUI(); updateNotifState(); }
     syncHeroCar();
     updateDots();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Al tope de una: es otra vista, no hay continuidad espacial que preservar.
+    // El scroll suave le sumaba media espera a la acción más frecuente de la app,
+    // y encima competía con el fundido del contenido que acababa de aparecer.
+    window.scrollTo({ top: 0 });
   }
 
   /* =========================================================
@@ -460,6 +470,7 @@
     const evaluated = list.map((sp) => ({ sp, miss: evalStation(sp, filters) }));
     const perfect = evaluated.filter((e) => e.miss.length === 0).map((e) => e.sp).sort(idealSort);
     const head = $('#resultsHead'), ul = $('#resultList'), empty = $('#resultEmpty');
+    const esc = vaEscalonada(ul);
     ul.innerHTML = ''; empty.classList.add('hidden');
 
     if (!list.length) {
@@ -470,13 +481,13 @@
     }
     if (perfect.length) {
       head.innerHTML = `<span class="rh-count">${perfect.length} ${perfect.length === 1 ? 'puesto ideal' : 'puestos ideales'} para ti</span>`;
-      perfect.forEach((sp, i) => { const c = spotCard(sp, []); c.classList.add('stagger'); c.style.setProperty('--i', i); ul.appendChild(c); });
+      perfect.forEach((sp, i) => { const c = spotCard(sp, []); escalonar(c, i, esc); ul.appendChild(c); });
       return;
     }
     // Sin coincidencia exacta → recomendaciones ordenadas por menos diferencias
     const near = evaluated.slice().sort((a, b) => a.miss.length - b.miss.length || idealSort(a.sp, b.sp));
     head.innerHTML = `<div class="rh-none">No encontramos un puesto que cumpla <b>todo</b> lo que pediste.<br/>Estas opciones son las más cercanas — en <span class="miss-red">rojo</span> lo que cambia:</div>`;
-    near.forEach((e, i) => { const c = spotCard(e.sp, e.miss); c.classList.add('stagger'); c.style.setProperty('--i', i); ul.appendChild(c); });
+    near.forEach((e, i) => { const c = spotCard(e.sp, e.miss); escalonar(c, i, esc); ul.appendChild(c); });
   }
 
   function availText(sp) {
@@ -1024,11 +1035,11 @@
     if (!user) return;
     renderTodayBanner();
     renderCalendar('#calDriver', myBookings, 'driver');
-    const ul = $('#bookList'); ul.innerHTML = '';
+    const ul = $('#bookList'), esc = vaEscalonada(ul); ul.innerHTML = '';
     $('#bookEmpty').classList.toggle('hidden', myBookings.length > 0);
     myBookings.forEach((bk, i) => {
       const [cls, lab] = PILL[bk.estado] || ['p-dim', bk.estado];
-      const li = document.createElement('li'); li.className = 'book-card stagger'; li.style.setProperty('--i', i);
+      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc);
       const fx = parseYmd(bk.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(bk.stationName)}</div><div class="bk-sub">de ${escapeHtml(bk.ownerName || '')} · Torre ${escapeHtml(bk.torre || '—')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
@@ -1094,11 +1105,11 @@
     myChats.slice(0, 4).forEach((ch) => cl.appendChild(chatRow(ch, uidv)));
   }
   function renderReqList(ulSel, emptySel, list) {
-    const ul = $(ulSel); ul.innerHTML = '';
+    const ul = $(ulSel), esc = vaEscalonada(ul); ul.innerHTML = '';
     if (emptySel) $(emptySel).classList.toggle('hidden', list.length > 0);
     list.forEach((rq, i) => {
       const [cls, lab] = { pendiente: ['p-pend', 'Pendiente'], confirmada: ['p-ok', 'Aceptada'], rechazada: ['p-no', 'Declinada'], completada: ['p-dim', 'Completada'], cancelada: ['p-dim', 'Cancelada'] }[rq.estado] || ['p-dim', rq.estado];
-      const li = document.createElement('li'); li.className = 'book-card stagger'; li.style.setProperty('--i', i);
+      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc);
       const fx = parseYmd(rq.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(rq.driverName || 'Vecino')}</div><div class="bk-sub">quiere ${escapeHtml(rq.stationName || 'tu puesto')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
@@ -1598,7 +1609,8 @@
       { ico: '🗓️', label: 'Reservas', val: st.reservas, fmt: (v) => fmtNum(Math.round(v)) },
       { ico: '🔌', label: 'Puestos', val: st.puestos, fmt: (v) => fmtNum(Math.round(v)) }
     ];
-    wrap.innerHTML = cards.map((c, i) => `<div class="metric-card stagger" style="--i:${i}"><span class="metric-ico">${c.ico}</span><b class="metric-val" data-i="${i}">${c.fmt(0)}</b><span class="metric-label">${c.label}</span></div>`).join('');
+    const esc = vaEscalonada(wrap);
+    wrap.innerHTML = cards.map((c, i) => `<div class="metric-card${esc ? ' stagger' : ''}" style="--i:${i}"><span class="metric-ico">${c.ico}</span><b class="metric-val" data-i="${i}">${c.fmt(0)}</b><span class="metric-label">${c.label}</span></div>`).join('');
     cards.forEach((c, i) => { const el = wrap.querySelector('.metric-val[data-i="' + i + '"]'); if (el) countUp(el, c.val, c.fmt, 900); });
   }
   function adminDailyBuckets(events) {
@@ -1626,21 +1638,21 @@
       c.count++;
     });
     const list = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 6);
-    const ul = $('#admTopList'); ul.innerHTML = '';
+    const ul = $('#admTopList'), esc = vaEscalonada(ul); ul.innerHTML = '';
     $('#admTopEmpty').classList.toggle('hidden', list.length > 0);
     const max = list.length ? list[0].count : 1;
     list.forEach((c, i) => {
-      const li = document.createElement('li'); li.className = 'rank-item stagger'; li.style.setProperty('--i', i);
+      const li = document.createElement('li'); li.className = 'rank-item'; escalonar(li, i, esc);
       li.innerHTML = `<span class="rank-pos">${i + 1}</span><div class="rank-main"><div class="rank-name">${escapeHtml(c.name)}</div><div class="rank-bar"><i style="width:${Math.round(c.count / max * 100)}%"></i></div></div><div class="rank-val"><b>${c.count}</b><small>${c.count === 1 ? 'reserva' : 'reservas'}</small></div>`;
       ul.appendChild(li);
     });
   }
   function renderCommonSpots() {
     const spots = panelStations().filter((s) => s.common);
-    const ul = $('#admSpotsList'); ul.innerHTML = '';
+    const ul = $('#admSpotsList'), esc = vaEscalonada(ul); ul.innerHTML = '';
     $('#admSpotsEmpty').classList.toggle('hidden', spots.length > 0);
     spots.forEach((sp, i) => {
-      const li = document.createElement('li'); li.className = 'book-card stagger'; li.style.setProperty('--i', i);
+      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc);
       li.innerHTML = `<div class="bk-top"><div><div class="bk-name">${escapeHtml(sp.nombre)}</div><div class="bk-sub">🅿️ ${escapeHtml(sp.numeroParqueadero || '—')} · ${escapeHtml(sp.puerto || '')} · ${(sp.pow || 0)} kW</div></div><span class="bk-pill ${sp.visible !== false ? 'p-ok' : 'p-dim'}">${sp.visible !== false ? 'Visible' : 'Oculto'}</span></div>
         <div class="bk-meta"><span>💰 ${fmtCOP(sp.precio || 0)}/kWh</span><span>🕐 ${escapeHtml(sp.desde || '—')}–${escapeHtml(sp.hasta || '—')}</span>${sp.breb ? `<span>💳 ${escapeHtml(sp.breb)}</span>` : ''}</div>
         <div class="bk-actions"><button class="btn-ghost btn-sm" data-edit="${escapeHtml(sp.id)}">Editar</button><button class="btn-ghost btn-sm btn-danger" data-del="${escapeHtml(sp.id)}">Eliminar</button></div>`;
@@ -1840,11 +1852,11 @@
     let list = panelUsers().slice().sort((a, b) => (b.role === 'admin' ? 1 : 0) - (a.role === 'admin' ? 1 : 0) || String(a.name || '').localeCompare(String(b.name || '')));
     if (term) list = list.filter((u) => [u.name, u.email, u.phone, u.torre, u.apto].some((f) => String(f || '').toLowerCase().includes(term)));
     $('#admUserCount').textContent = list.length + (list.length === 1 ? ' residente' : ' residentes');
-    const ul = $('#admUsersList'); ul.innerHTML = '';
+    const ul = $('#admUsersList'), esc = vaEscalonada(ul); ul.innerHTML = '';
     $('#admUsersEmpty').classList.toggle('hidden', list.length > 0);
     if (!list.length) { $('#admUsersEmpty').innerHTML = '<div class="empty-icon">👥</div><p>' + (term ? 'Sin resultados.' : 'Aún no hay residentes registrados.') + '</p>'; }
     list.forEach((u, i) => {
-      const li = document.createElement('li'); li.className = 'user-row stagger'; li.style.setProperty('--i', i);
+      const li = document.createElement('li'); li.className = 'user-row'; escalonar(li, i, esc);
       const initials = String(u.name || u.email || 'U').trim().charAt(0).toUpperCase();
       const loc = [u.torre && u.torre !== '—' ? 'Torre ' + u.torre : null, u.apto && u.apto !== '—' ? 'Apto ' + u.apto : null].filter(Boolean).join(' · ') || 'Sin ubicación';
       li.innerHTML = `<span class="user-av">${escapeHtml(initials)}</span><div class="user-main"><div class="user-name">${escapeHtml(u.name || 'Sin nombre')}${u.role === 'admin' ? ' <span class="sc-badge b-ver">Admin</span>' : ''}</div><div class="user-sub">${escapeHtml(u.email || '')}</div><div class="user-loc">🏢 ${escapeHtml(loc)}${u.phone ? ' · 📱 ' + escapeHtml(u.phone) : ''}</div></div><button class="btn-ghost btn-sm user-manage" data-uid="${escapeHtml(u.uid)}">Gestionar</button>`;
@@ -2537,7 +2549,7 @@
     $('#admRepPdf').addEventListener('click', () => downloadReporte('pdf'));
     $('#admRepCsv').addEventListener('click', () => downloadReporte('csv'));
     $$('#admChartGroup .seg-btn').forEach((b) => b.addEventListener('click', () => { admChart.metric = b.dataset.agroup; $$('#admChartGroup .seg-btn').forEach((x) => x.classList.toggle('is-active', x === b)); renderAdminChart(); }));
-    $('#admUserSearch').addEventListener('input', drawUsers);
+    $('#admUserSearch').addEventListener('input', debounce(drawUsers, 150));
     $('#goPanelBtn').addEventListener('click', () => { adminAsGuest = false; localStorage.setItem(LS_ADMINGUEST, 'false'); loadAdminSettingsUI(); refreshMode(); });
     $('#adminAsGuest').addEventListener('click', () => {
       adminAsGuest = !adminAsGuest; localStorage.setItem(LS_ADMINGUEST, JSON.stringify(adminAsGuest));

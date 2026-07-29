@@ -50,6 +50,20 @@ svg { display: block; }
 
   --font-display: "Orbitron", "Exo 2", system-ui, sans-serif;
 
+  /* Movimiento — cuatro curvas para toda la app.
+     Antes había trece cubic-bezier escritas a mano, siete de ellas casi
+     idénticas. Regla: lo que entra o sale arranca rápido (ease-out); lo que se
+     desplaza dentro de la pantalla acelera y frena (ease-in-out); el rebote
+     queda reservado a las celebraciones. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-pop: cubic-bezier(0.2, 0.8, 0.3, 1.4);
+  --dur-press: 120ms;
+  --dur-fast: 160ms;
+  --dur-ui: 200ms;
+  --dur-sheet: 320ms;
+
   --accent: #3ad4e6;
   --accent-rgb: 58,212,230;
   --accent-2: #5ee7c8;
@@ -117,9 +131,11 @@ body[data-accent="pink"]   { --accent:#e878b8; --accent-rgb:232,120,184; --accen
 
 /* ---------- Contenido / vistas ---------- */
 .content { flex: 1; padding: 6px 16px 116px; }
-.view { display: none; animation: viewIn 0.28s ease; }
+.view { display: none; animation: viewIn var(--dur-fast) var(--ease-out); }
 .view.is-active { display: block; }
-@keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* Solo opacidad: la barra inferior es el control más usado de la app y el
+   desplazamiento de 6px competía con el scroll al tope que hace goView(). */
+@keyframes viewIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------- Cards ---------- */
 .card {
@@ -238,7 +254,7 @@ textarea {
 }
 .details-toggle .chev { transition: transform 0.25s; }
 .details-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
-.details-body { padding-top: 4px; display: grid; gap: 14px; animation: viewIn 0.25s ease; }
+.details-body { padding-top: 4px; display: grid; gap: 14px; animation: viewIn 180ms var(--ease-out); }
 
 /* ---------- Botones ---------- */
 .btn-primary {
@@ -1067,7 +1083,10 @@ textarea {
 .rank-main { flex: 1; min-width: 0; }
 .rank-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
 .rank-bar { height: 7px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
-.rank-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 999px; transform-origin: left; animation: rankGrow 0.8s cubic-bezier(.3,.7,.3,1) backwards; }
+.rank-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 999px; transform-origin: left; }
+/* La barra crece solo cuando el ranking entra por primera vez. Al re-dibujarse
+   —y se re-dibuja cada vez que llega un dato— ya no vuelve a barrer de cero. */
+.stagger .rank-bar i { animation: rankGrow 600ms var(--ease-out) backwards; }
 @keyframes rankGrow { from { transform: scaleX(0); } }
 .rank-val { text-align: right; flex-shrink: 0; }
 .rank-val b { display: block; font-size: 15px; font-weight: 700; font-family: var(--font-display); font-variant-numeric: tabular-nums; }
@@ -1120,8 +1139,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .btn-ghost { transition: transform 0.12s ease, color 0.15s, border-color 0.15s, background 0.15s; }
 .btn-ghost:active { transform: scale(0.96); }
 
-/* Entrada escalonada de listas */
-.stagger { animation: staggerIn 0.42s cubic-bezier(.2,.7,.3,1) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+/* Entrada escalonada de listas
+   El retardo se topa a propósito: con 96 residentes, un índice sin techo dejaba
+   la última fila en opacity:0 más de cuatro segundos —el adorno tapando el dato—.
+   Seis pasos bastan para que se lea como cascada, y el tope queda en 240 ms. */
+.stagger { animation: staggerIn 300ms var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 6) * 40ms); }
 @keyframes staggerIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 /* Ripple al tocar */

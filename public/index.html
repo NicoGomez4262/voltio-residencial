@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Exo+2:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="/css/styles.css?v=2.7.4" />
+  <link rel="stylesheet" href="/css/styles.css?v=2.8.0" />
 
   <style>
   /* ---------- Bienvenida (crítico: va incrustado para pintarse al instante) ---------- */
@@ -33,7 +33,7 @@
        sola y nadie se queda encerrado mirándola. */
     animation:spAuto .4s ease 6.1s forwards}
   @keyframes spAuto{to{opacity:0;visibility:hidden;pointer-events:none}}
-  .splash.is-out{opacity:0;transition:opacity .42s ease;pointer-events:none}
+  .splash.is-out{opacity:0;transition:opacity .28s cubic-bezier(.23,1,.32,1);pointer-events:none}
   body[data-accent="green"]  .splash{--sp:#4ade9a;--sp2:#3ad4e6;--on-sp:#05231a}
   body[data-accent="violet"] .splash{--sp:#8b8cf0;--sp2:#3ad4e6;--on-sp:#0d0b28}
   body[data-accent="gold"]   .splash{--sp:#e8c46a;--sp2:#e89a5a;--on-sp:#2a1f06}
@@ -83,6 +83,20 @@
     transform-origin:left center;transform:scaleX(0);
     animation:spBar 2.7s cubic-bezier(.4,0,.2,1) 1.1s both}
   @keyframes spBar{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+
+  /* Visita repetida: la presentación completa se ve UNA sola vez. Después basta
+     el logo y el nombre mientras la app termina de encender —quien abre Voltio
+     tres veces al día ya sabe cómo se llama—. El eslogan se muestra quieto:
+     está ahí para quien alcance a mirarlo, no para hacerse leer. */
+  .splash.sp-corta .sp-halo{animation-duration:1.4s}
+  .splash.sp-corta .sp-logo{animation-duration:.5s}
+  .splash.sp-corta .sp-ring{display:none}
+  .splash.sp-corta .sp-name{animation:spUp .4s cubic-bezier(.23,1,.32,1) .22s both}
+  .splash.sp-corta .sp-l1,
+  .splash.sp-corta .sp-l2,
+  .splash.sp-corta .sp-sub,
+  .splash.sp-corta .sp-bar{animation:none}
+  .splash.sp-corta .sp-bar i{animation:spBar .7s linear both}
 
   @media (max-width:360px){
     .sp-logo{width:88px;height:88px;border-radius:26px}
@@ -139,7 +153,21 @@
     // presentación: ahí la saltamos por completo.
     var vuelveDePago = /[?&](id|wpay)=/.test(location.search);
     var quieto = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var dura = vuelveDePago ? 0 : (quieto ? 1200 : 4700);
+
+    // La presentación entera —logo, nombre, eslogan línea por línea— se ve una
+    // sola vez. A partir de la segunda apertura el vecino solo necesita saber
+    // que la app está encendiendo: 900 ms en vez de 4,7 s.
+    var yaLaVio = false;
+    try {
+      yaLaVio = localStorage.getItem('voltio.splash.visto') === '1';
+      localStorage.setItem('voltio.splash.visto', '1');
+    } catch (e) {}
+
+    var dura;
+    if (vuelveDePago) dura = 0;
+    else if (yaLaVio) dura = quieto ? 700 : 900;
+    else dura = quieto ? 1200 : 4700;
+    if (yaLaVio) s.classList.add('sp-corta');
 
     // Este script va incrustado justo debajo del elemento, así que se ejecuta
     // mientras se parsea la página: quitarla aquí ocurre antes del primer
@@ -153,7 +181,7 @@
       cerrado = true;
       s.classList.add('is-out');
       document.body.style.overflow = '';
-      setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 450);
+      setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 300);
     }
     var t = setTimeout(cerrar, dura);
     // Se puede saltar tocando: nadie debería sentirse atrapado en una intro.
@@ -162,7 +190,9 @@
     // A los 700 ms el logo ya debería estar entrando. Si sigue invisible, el
     // navegador tiene las animaciones congeladas: mostramos todo quieto en vez
     // de dejar la pantalla en negro.
-    setTimeout(function () {
+    // (En la versión corta no aplica: cerraría casi al mismo tiempo que revisa,
+    //  y el "todo quieto" alcanzaría a verse como un parpadeo.)
+    if (dura >= 1500) setTimeout(function () {
       if (cerrado) return;
       var logo = s.querySelector('.sp-logo');
       var visible = logo ? parseFloat(getComputedStyle(logo).opacity) : 1;
@@ -684,7 +714,7 @@
           <div class="data-actions"><button id="exportBtn2" class="btn-ghost" type="button">Exportar recibos (CSV)</button><button id="resetBtn" class="btn-ghost btn-danger" type="button">Restablecer datos locales</button></div>
         </div>
 
-        <p class="version">Voltio Residencial v2.7.4 · Piloto conjunto MontReal ⚡</p>
+        <p class="version">Voltio Residencial v2.8.0 · Piloto conjunto MontReal ⚡</p>
       </section>
 
       <!-- ============ ADMIN: PANEL ============ -->
@@ -1034,11 +1064,11 @@
     </defs>
   </svg>
 
-  <script type="module" src="/js/backend.js?v=2.7.4"></script>
-  <script defer src="/js/reporte.js?v=2.7.4"></script>
-  <script defer src="/js/wompi.js?v=2.7.4"></script>
-  <script defer src="/js/recibo.js?v=2.7.4"></script>
-  <script defer src="/js/ocr.js?v=2.7.4"></script>
-  <script defer src="/js/app.js?v=2.7.4"></script>
+  <script type="module" src="/js/backend.js?v=2.8.0"></script>
+  <script defer src="/js/reporte.js?v=2.8.0"></script>
+  <script defer src="/js/wompi.js?v=2.8.0"></script>
+  <script defer src="/js/recibo.js?v=2.8.0"></script>
+  <script defer src="/js/ocr.js?v=2.8.0"></script>
+  <script defer src="/js/app.js?v=2.8.0"></script>
 </body>
 </html>
