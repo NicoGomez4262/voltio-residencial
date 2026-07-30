@@ -108,7 +108,7 @@
   const round2 = (n) => Math.round((n || 0) * 100) / 100;
   const uid8 = (p) => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const tsDate = (ts) => (ts && ts.seconds ? new Date(ts.seconds * 1000) : new Date());
-  const starTxt = (a) => '★'.repeat(Math.round(a)) + '☆'.repeat(5 - Math.round(a));
+  const starTxt = (a) => '<svg class="ico ico-fill" aria-hidden="true"><use href="#i-star"/></svg>'.repeat(Math.round(a)) + '<svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>'.repeat(5 - Math.round(a));
   const hToMin = (h) => { const p = String(h || '0:0').split(':'); return (+p[0]) * 60 + (+p[1]); };
   const sizeRank = (s) => ({ 'Pequeño': 1, 'Mediano': 2, 'Grande': 3 }[s] || 2);
   function fmtCompact(n, m) {
@@ -145,7 +145,26 @@
   const taState = { torre: null, piso: null, unit: null };
   const chartState = { group: 'day' };
   const admChart = { metric: 'cop' };
-  const filters = { port: 'todos', minPow: 0, size: 'todos', day: 'any', date: null, band: 'any' };
+  /* Fecha y franja de verdad, no estados relativos. "Cualquier día" se cayó a
+     propósito: sin fecha no hay reservas que consultar, y sin eso el filtro de
+     disponibilidad vuelve a ser una promesa vacía. Arranca en hoy. */
+  const filters = { port: 'todos', minPow: 0, size: 'todos', fecha: null, from: '18:00', to: '21:00' };
+
+  /* Los cuatro conectores que se usan en Colombia, con el nombre corriente
+     arriba y el técnico abajo: mucha gente sabe que su cable es "Mennekes" o
+     que el carro trae "J1772", pero no que eso es lo que la app llama Tipo 2 y
+     Tipo 1. El `id` es exactamente el valor que ya se guarda en Firestore. */
+  const PUERTOS = [
+    { id: 'Tipo 1', ico: 'i-p-t1', nombre: 'Tipo 1', tec: 'J1772',
+      ayuda: 'El de los eléctricos japoneses y americanos.' },
+    { id: 'Tipo 2', ico: 'i-p-t2', nombre: 'Tipo 2', tec: 'Mennekes',
+      ayuda: 'El más común en Colombia. Si tu carro es europeo, es este.' },
+    { id: 'CCS', ico: 'i-p-ccs', nombre: 'CCS', tec: 'carga rápida',
+      ayuda: 'Es un Tipo 2 con dos pines gordos abajo, para cargar rápido.' },
+    { id: 'Doméstico', ico: 'i-p-dom', nombre: 'Doméstico', tec: 'toma de pared',
+      ayuda: 'Un enchufe normal: carga lento, pero de noche alcanza.' }
+  ];
+  const puertoDe = (id) => PUERTOS.find((p) => p.id === id) || null;
   const spDias = [0, 1, 1, 1, 1, 1, 0];
   const calOffset = { driver: 0, host: 0 };
   const MAX_FOTOS = 3;
@@ -219,7 +238,7 @@
     if (currentView === 'buscar') runSearch();
   }
   function showNotice(msg) {
-    ['#buscarNotice', '#novNotice'].forEach((s) => { const el = $(s); if (el) { el.textContent = '⚠️ ' + msg; el.classList.remove('hidden'); } });
+    ['#buscarNotice', '#novNotice'].forEach((s) => { const el = $(s); if (el) { el.textContent = '<svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg> ' + msg; el.classList.remove('hidden'); } });
   }
   function hideNotice() { ['#buscarNotice', '#novNotice'].forEach((s) => { const el = $(s); if (el) el.classList.add('hidden'); }); }
   const needLogin = () => { openSheet('#loginSheet'); toast('Inicia sesión para continuar', 'error'); };
@@ -303,9 +322,9 @@
       if (esVecino()) b.push('<span class="sc-badge b-ver">✓ Vecino verificado</span>');
       if (VB.isGoogle()) b.push('<span class="sc-badge b-ver">✓ Google</span>');
       if (user.emailVerified) b.push('<span class="sc-badge b-ok">✓ Correo verificado</span>');
-      b.push('<span class="sc-badge b-id">🪪 Identidad: próximamente</span>');
+      b.push('<span class="sc-badge b-id"><svg class="ico" aria-hidden="true"><use href="#i-id"/></svg> Identidad: próximamente</span>');
       $('#accBadges').innerHTML = b.join('');
-    } else top.textContent = '👤';
+    } else top.textContent = '<svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>';
     ['#resAuth', '#novAuth', '#puestoAuth', '#chatAuth'].forEach((s) => { const el = $(s); if (el) el.classList.toggle('hidden', logged); });
     $('#resContent').classList.toggle('hidden', !logged);
     $('#novContent').classList.toggle('hidden', !logged);
@@ -344,8 +363,8 @@
   function startAdminWatchers() {
     if (unsubs.allbk) return;
     unsubs.allbk = VB.watchAllBookings((l) => { const prev = allBookings; allBookings = l; onAllBookingsUpdate(prev); }, () => {});
-    unsubs.allst = VB.watchConjuntoStations(CONJUNTO, (l) => { allStations = l; if (currentView === 'panel') renderPanel(); }, () => {});
-    unsubs.allses = VB.watchAllSessions((l) => { allSessions = l; if (currentView === 'panel') renderPanel(); }, () => {});
+    unsubs.allst = VB.watchConjuntoStations(CONJUNTO, (l) => { allStations = l; pedirPanel(); }, () => {});
+    unsubs.allses = VB.watchAllSessions((l) => { allSessions = l; pedirPanel(); }, () => {});
   }
   function onProfileUpdate(wasAdmin) {
     const nowAdmin = isAdmin();
@@ -356,7 +375,7 @@
     loadAccesoUI(); renderGate();
     if (nowAdmin && !wasAdmin) { startAdminWatchers(); refreshMode({ keepView: true }); }
     else if (!nowAdmin && wasAdmin) { stopWatchers(['allbk', 'allst', 'allses']); allBookings = []; allStations = []; allSessions = []; refreshMode({ keepView: true }); }
-    else if (nowAdmin) { if (currentView === 'panel') renderPanel(); if (currentView === 'usuarios') renderUsers(); }
+    else if (nowAdmin) { pedirPanel(); if (currentView === 'usuarios') renderUsers(); }
   }
   function onAllBookingsUpdate(prev) {
     if (prev && prev.length) {
@@ -365,7 +384,7 @@
         notify('Nueva reserva en el conjunto', (b.driverName || 'Un vecino') + ' · ' + (b.stationName || 'un puesto'));
       });
     }
-    if (currentView === 'panel') renderPanel();
+    pedirPanel();
   }
   function stopWatchers(keys) { keys.forEach((k) => { if (unsubs[k]) { try { unsubs[k](); } catch (e) {} delete unsubs[k]; } }); }
   function refreshAll() {
@@ -373,7 +392,7 @@
     if (currentView === 'novedades') renderNovedades();
     if (currentView === 'agenda') renderAgenda();
     if (currentView === 'chats') renderChatList();
-    if (currentView === 'panel') renderPanel();
+    pedirPanel();
     if (currentView === 'usuarios') renderUsers();
     updateDots();
   }
@@ -416,7 +435,7 @@
      Notificaciones
      ========================================================= */
   function notify(title, body) {
-    toast('🔔 ' + title);
+    toast('' + title);
     if (navigator.vibrate) { try { navigator.vibrate(24); } catch (e) {} }
     try {
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -430,7 +449,7 @@
   function requestNotifPermission() {
     if (!('Notification' in window)) { toast('Tu navegador no soporta notificaciones', 'error'); return Promise.resolve('unsupported'); }
     return Notification.requestPermission().then((p) => {
-      if (p === 'granted') { toast('Notificaciones activadas 🔔'); notify('Voltio MontReal', 'Te avisaremos de reservas, confirmaciones y mensajes.'); setupPush(); }
+      if (p === 'granted') { toast('Notificaciones activadas'); notify('Voltio MontReal', 'Te avisaremos de reservas, confirmaciones y mensajes.'); setupPush(); }
       else if (p === 'denied') toast('Notificaciones bloqueadas en el navegador', 'error');
       refreshNotifBanner(); updateNotifState();
       return p;
@@ -450,9 +469,9 @@
     const el = $('#notifState'); if (!el) return;
     const sup = 'Notification' in window;
     const st = sup ? Notification.permission : 'unsupported';
-    const map = { granted: '✅ Activadas', denied: '🚫 Bloqueadas (actívalas en los ajustes del navegador)', default: 'Aún no activadas', unsupported: 'No disponibles en este navegador' };
+    const map = { granted: '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Activadas', denied: '<svg class="ico" aria-hidden="true"><use href="#i-ban"/></svg> Bloqueadas (actívalas en los ajustes del navegador)', default: 'Aún no activadas', unsupported: 'No disponibles en este navegador' };
     const cerrada = (VB && VB.pushAvailable && VB.pushAvailable())
-      ? (pushToken ? ' · también con la app cerrada 📲' : '')
+      ? (pushToken ? ' · también con la app cerrada <svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg>' : '')
       : ' · solo con la app abierta';
     el.textContent = (map[st] || '') + (st === 'granted' ? cerrada : '');
     const btn = $('#notifEnable2'); if (btn) btn.classList.toggle('hidden', st === 'granted' || st === 'unsupported');
@@ -474,35 +493,241 @@
   const conjuntoStations = () => stations.filter((s) => (s.conjunto || 'montreal') === CONJUNTO && s.visible !== false);
   const ratingAvg = (s) => (s.ratingCount ? s.ratingSum / s.ratingCount : 0);
 
+  /* =========================================================
+     Rejilla de conectores
+     La misma pieza en dos sitios: como filtro (con "Todos" y el contador de
+     puestos de cada tipo) y como campo del formulario al publicar (sin ninguna
+     de las dos). Se dibuja el conector porque cuatro nombres sin cara no le
+     dicen nada a quien acaba de comprar el carro.
+     ========================================================= */
+  function celdaPuerto(p, activo, cuenta) {
+    const vacia = cuenta === 0;
+    return `<button type="button" class="pcell${activo ? ' is-active' : ''}${vacia ? ' is-empty' : ''}" data-port="${escapeHtml(p.id)}"
+      aria-pressed="${activo}" title="${escapeHtml(p.ayuda || '')}">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><use href="#${p.ico}"/></svg>
+      <span class="pn">${escapeHtml(p.nombre)}</span><span class="pk">${escapeHtml(p.tec)}</span>
+      ${cuenta == null ? '' : `<span class="pc">${cuenta}</span>`}</button>`;
+  }
+  /* Cuántos puestos del conjunto tiene cada conector. Sale de lo que ya está en
+     memoria, así que no cuesta ni una consulta: es solo dejar de esconder un
+     dato que la app ya tenía. */
+  function cuentaPorPuerto() {
+    const c = {};
+    conjuntoStations().forEach((s) => { const k = s.puerto || ''; c[k] = (c[k] || 0) + 1; });
+    return c;
+  }
+  function pintarFiltroPuertos() {
+    const box = $('#fPort'); if (!box) return;
+    const c = cuentaPorPuerto(), total = conjuntoStations().length;
+    const todos = { id: 'todos', ico: 'i-p-all', nombre: 'Todos', tec: 'sin filtrar', ayuda: '' };
+    box.innerHTML = celdaPuerto(todos, filters.port === 'todos', total) +
+      PUERTOS.map((p) => celdaPuerto(p, filters.port === p.id, c[p.id] || 0)).join('');
+    notaPuerto();
+  }
+  function notaPuerto() {
+    const el = $('#fPortNote'); if (!el) return;
+    const c = cuentaPorPuerto(), total = conjuntoStations().length;
+    if (filters.port === 'todos') {
+      el.innerHTML = total ? `<b>${total} ${total === 1 ? 'puesto' : 'puestos'}</b> con cualquier conector.` : '';
+      return;
+    }
+    const p = puertoDe(filters.port), n = c[filters.port] || 0;
+    el.innerHTML = (n ? `<b>${n} ${n === 1 ? 'puesto' : 'puestos'}</b> con ${escapeHtml(p ? p.nombre : filters.port)}. ` : `Ningún puesto con ${escapeHtml(p ? p.nombre : filters.port)}. `) +
+      (p ? escapeHtml(p.ayuda) : '');
+  }
+  /* Versión para el formulario: sin "Todos" y sin contador — acá no se filtra,
+     se declara cuál es el conector que uno tiene instalado. */
+  function pintarSelectorPuerto(sel, valor) {
+    const box = $(sel); if (!box) return;
+    box.innerHTML = PUERTOS.map((p) => celdaPuerto(p, p.id === valor, null)).join('');
+    box.dataset.valor = valor || '';
+  }
+  function armarSelectorPuerto(sel, alCambiar) {
+    const box = $(sel); if (!box) return;
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('.pcell'); if (!b) return;
+      box.dataset.valor = b.dataset.port;
+      $$(sel + ' .pcell').forEach((x) => {
+        const on = x === b;
+        x.classList.toggle('is-active', on);
+        x.setAttribute('aria-pressed', String(on));
+      });
+      if (alCambiar) alCambiar(b.dataset.port);
+    });
+  }
+  const valorSelectorPuerto = (sel) => { const b = $(sel); return (b && b.dataset.valor) || 'Tipo 2'; };
+
   function isOpenNow(sp) {
     const now = new Date(); const dias = sp.dias || [1, 1, 1, 1, 1, 1, 1];
     if (!dias[now.getDay()]) return false;
     const cur = now.getHours() * 60 + now.getMinutes();
     return cur >= hToMin(sp.desde) && cur <= hToMin(sp.hasta);
   }
-  function bandRange(b) { return b === 'm' ? [6, 12] : b === 't' ? [12, 18] : b === 'n' ? [18, 24] : [0, 24]; }
-  function targetWeekdays(f) {
-    if (f.day === 'hoy') return [new Date().getDay()];
-    if (f.day === 'man') return [addDays(new Date(), 1).getDay()];
-    if (f.day === 'pick' && f.date) return [parseYmd(f.date).getDay()];
-    return null; // any
+  /* =========================================================
+     Ocupación real del conjunto
+     Hasta ahora el filtro de disponibilidad solo comparaba con el horario
+     semanal que el anfitrión declaró, y nunca con las reservas: un puesto con
+     las doce horas ya apartadas salía como disponible. Acá se consultan las
+     horas de verdad, una sola vez por fecha.
+     ========================================================= */
+  const ocupCache = new Map();
+  /* Devuelve, por id de puesto, el conjunto de cuartos de hora ya apartados
+     ese día por OTRO vecino (lo de uno mismo no estorba para volver a mirar). */
+  async function ocupacionDelDia(fecha) {
+    if (!fecha || !VB || !VB.busyDay) return new Map();
+    if (ocupCache.has(fecha)) return ocupCache.get(fecha);
+    const mapa = new Map();
+    const lista = await VB.busyDay(fecha).catch(() => []);
+    const yo = (VB.uid && VB.uid()) || '';
+    lista.forEach((s) => {
+      if (s.driverUid && s.driverUid === yo) return;
+      if (!mapa.has(s.stationId)) mapa.set(s.stationId, new Set());
+      mapa.get(s.stationId).add(s.hhmm);
+    });
+    ocupCache.set(fecha, mapa);
+    setTimeout(() => ocupCache.delete(fecha), 30000);
+    return mapa;
   }
-  function availabilityMatch(sp, f) {
-    if (f.day === 'any' && f.band === 'any') return true;
+  const olvidarOcupacion = (fecha) => { if (fecha) ocupCache.delete(fecha); else ocupCache.clear(); };
+
+  /* ¿Le queda al puesto la franja pedida, ese día, libre de punta a punta? */
+  function franjaLibre(sp, fecha, from, to, ocup) {
     const dias = sp.dias || [1, 1, 1, 1, 1, 1, 1];
-    const [bs, be] = bandRange(f.band);
-    const winS = hToMin(sp.desde) / 60, winE = hToMin(sp.hasta) / 60;
-    const overlaps = (wd) => dias[wd] && winS < be && winE > bs;
-    const days = targetWeekdays(f);
-    if (!days) { for (let wd = 0; wd < 7; wd++) if (overlaps(wd)) return true; return false; }
-    return days.some(overlaps);
+    if (!dias[parseYmd(fecha).getDay()]) return false;
+    // Tiene que caber dentro del horario que el anfitrión abre.
+    if (hToMin(from) < hToMin(sp.desde) || hToMin(to) > hToMin(sp.hasta)) return false;
+    if (!ocup) return true;
+    const tomadas = ocup.get(sp.id);
+    if (!tomadas || !tomadas.size) return true;
+    // slotKeys ya deja los 15 minutos de relevo entre una carga y la siguiente.
+    return !VB.slotKeys(fecha, from, to).some((k) => tomadas.has(k));
   }
-  function evalStation(sp, f) {
+
+  function availabilityMatch(sp, f, ocup) {
+    if (!f.fecha) return true;
+    return franjaLibre(sp, f.fecha, f.from, f.to, ocup);
+  }
+
+  /* Cuántos puestos quedan libres a cada hora de ese día, para dibujar la cinta.
+     Devuelve un arreglo de 24 posiciones: en la hora h, cuántos puestos tienen
+     ese tramo completo libre. */
+  function libresPorHora(lista, fecha, ocup) {
+    const out = new Array(24).fill(0);
+    if (!fecha) return out;
+    for (let h = 0; h < 24; h++) {
+      const from = String(h).padStart(2, '0') + ':00';
+      const to = String(h + 1).padStart(2, '0') + ':00';
+      out[h] = lista.filter((sp) => franjaLibre(sp, fecha, from, h === 23 ? '23:59' : to, ocup)).length;
+    }
+    return out;
+  }
+  /* =========================================================
+     ¿Cuándo lo necesitás? — tira de días y cinta de horas
+     Antes esto eran ocho chips relativas donde "Mañana" significaba dos cosas
+     distintas en dos filas contiguas, y ninguna contestaba "¿está libre?".
+     ========================================================= */
+  const DIAS_CORTO = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  const H_INI = 6, H_FIN = 24;          // la cinta va de las 6 a la medianoche
+  const DIAS_TIRA = 14;
+  let ribPend = null;                    // primer toque de la franja, esperando el segundo
+
+  const hhmm = (h) => String(h).padStart(2, '0') + ':00';
+
+  function pintarTira() {
+    const box = $('#fDays'); if (!box) return;
+    const hoy = new Date();
+    if (!filters.fecha) filters.fecha = ymd(hoy);
+    const html = [];
+    for (let i = 0; i < DIAS_TIRA; i++) {
+      const d = addDays(hoy, i), key = ymd(d), activo = key === filters.fecha;
+      const rot = i === 0 ? 'Hoy' : i === 1 ? 'Mañ' : DIAS_CORTO[d.getDay()];
+      // Los tres puntos resumen la misma información que la cinta: mucho, poco, nada.
+      const pts = puntosDelDia(key);
+      html.push(`<button type="button" class="dcell${activo ? ' is-active' : ''}${pts === 0 ? ' is-full' : ''}"
+        data-fecha="${key}" aria-pressed="${activo}"
+        aria-label="${i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : DIAS_CORTO[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}">
+        <span class="dw">${rot}</span><span class="dn">${d.getDate()}</span>
+        <span class="dd">${[0, 1, 2].map((k) => `<i class="${k < pts ? 'on' : ''}"></i>`).join('')}</span></button>`);
+    }
+    box.innerHTML = html.join('');
+    const d = parseYmd(filters.fecha);
+    const m = $('#fMonth');
+    if (m) m.textContent = MESES[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  /* Cuánta holgura tiene ese día, en tres pasos. Sin la consulta hecha se
+     asume holgado: es mejor mostrar de más y corregir, que dejar la tira gris. */
+  function puntosDelDia(fecha) {
+    const lista = conjuntoStations();
+    if (!lista.length) return 0;
+    const abren = lista.filter((sp) => (sp.dias || [1, 1, 1, 1, 1, 1, 1])[parseYmd(fecha).getDay()]).length;
+    if (!abren) return 0;
+    const ocup = ocupCache.get(fecha);
+    if (!ocup) return 3;
+    const horas = libresPorHora(lista, fecha, ocup);
+    const pico = Math.max.apply(null, horas.slice(H_INI, H_FIN));
+    return pico === 0 ? 0 : pico < abren * 0.4 ? 1 : pico < abren * 0.75 ? 2 : 3;
+  }
+
+  function pintarCinta() {
+    const box = $('#fRib'); if (!box || !filters.fecha) return;
+    const lista = conjuntoStations();
+    const ocup = ocupCache.get(filters.fecha) || null;
+    const libres = libresPorHora(lista, filters.fecha, ocup);
+    const tope = Math.max(1, Math.max.apply(null, libres.slice(H_INI, H_FIN)));
+    const desde = hToMin(filters.from) / 60, hasta = hToMin(filters.to) / 60;
+    const html = [];
+    for (let h = H_INI; h < H_FIN; h++) {
+      const n = libres[h], cerrado = n === 0, sel = h >= desde && h < hasta;
+      const alto = cerrado ? 6 : Math.round(8 + (n / tope) * 32);
+      html.push(`<button type="button" class="rb-cell${sel ? ' sel' : ''}${cerrado ? ' closed' : ''}"
+        data-h="${h}" aria-pressed="${sel}"
+        aria-label="${hhmm(h)}: ${cerrado ? 'nadie abre' : n + (n === 1 ? ' puesto libre' : ' puestos libres')}">
+        <span class="bar" style="height:${alto}px"></span>
+        <span class="hh">${h % 3 === 0 ? h : ''}</span></button>`);
+    }
+    box.innerHTML = html.join('');
+    const r = $('#fRange');
+    if (r) r.textContent = filters.from + ' → ' + (filters.to === '24:00' ? '00:00' : filters.to);
+    notaFranja(lista, libres);
+  }
+  /* La frase de abajo: cuántos puestos aguantan la franja COMPLETA, que es lo
+     que de verdad le sirve a quien va a dejar el carro cargando. */
+  function notaFranja(lista, libres) {
+    const el = $('#bandNote'); if (!el) return;
+    if (!filters.fecha) { el.textContent = ''; return; }
+    const ocup = ocupCache.get(filters.fecha) || null;
+    const n = lista.filter((sp) => franjaLibre(sp, filters.fecha, filters.from, filters.to, ocup)).length;
+    const d = parseYmd(filters.fecha), hoy = ymd(new Date());
+    const cuando = filters.fecha === hoy ? 'hoy'
+      : filters.fecha === ymd(addDays(new Date(), 1)) ? 'mañana'
+      : 'el ' + DIAS_CORTO[d.getDay()] + ' ' + d.getDate();
+    const rango = filters.from + ' a ' + (filters.to === '24:00' ? '00:00' : filters.to);
+    if (!n) {
+      // Buscamos la hora más cercana con sitio, para no dejarlo en un no seco.
+      const alt = libres.slice(H_INI, H_FIN).map((v, i) => ({ h: i + H_INI, v })).filter((x) => x.v > 0);
+      const sug = alt.length ? ` Prueba a las ${hhmm(alt.sort((a, b) => b.v - a.v)[0].h)}.` : '';
+      el.innerHTML = `Ningún puesto libre <b>toda</b> la franja de ${rango} ${cuando}.` + sug;
+    } else {
+      el.innerHTML = `<b>${n} ${n === 1 ? 'puesto libre' : 'puestos libres'}</b> de ${rango} ${cuando}.`;
+    }
+  }
+
+  function elegirFranja(h) {
+    if (ribPend === null) { ribPend = h; filters.from = hhmm(h); filters.to = hhmm(h + 1); }
+    else {
+      if (h >= ribPend) { filters.from = hhmm(ribPend); filters.to = hhmm(h + 1); }
+      else { filters.from = hhmm(h); filters.to = hhmm(ribPend + 1); }
+      ribPend = null;
+    }
+    pintarCinta(); runSearch();
+  }
+
+  function evalStation(sp, f, ocup) {
     const miss = [];
     if (f.port !== 'todos' && sp.puerto !== f.port) miss.push('Puerto');
     if (f.minPow > 0 && (sp.pow || 0) < f.minPow) miss.push('Potencia');
     if (f.size !== 'todos' && sizeRank(sp.tamano) < sizeRank(f.size)) miss.push('Tamaño');
-    if (!availabilityMatch(sp, f)) miss.push('Disponibilidad');
+    if (!availabilityMatch(sp, f, ocup)) miss.push('Disponibilidad');
     return miss;
   }
   function idealSort(a, b) {
@@ -513,9 +738,28 @@
     return (a.precio || 0) - (b.precio || 0);
   }
 
+  /* La búsqueda ahora necesita saber qué horas están apartadas, y eso es una
+     consulta. Se dibuja de una con lo que haya en caché —para que tocar una
+     chip siga sintiéndose instantáneo— y se vuelve a dibujar cuando llega la
+     respuesta. La lista anterior NO se vacía mientras tanto: vaciarla dejaría un
+     hueco blanco de 200 ms en la pantalla más usada de la app. */
+  let searchTicket = 0;
   function runSearch() {
+    const fecha = filters.fecha;
+    dibujarResultados(fecha ? ocupCache.get(fecha) : null);
+    if (!fecha || ocupCache.has(fecha)) return;
+    const mio = ++searchTicket;
+    ocupacionDelDia(fecha).then((ocup) => {
+      // Si mientras tanto la persona cambió de fecha, este resultado ya no sirve.
+      if (mio !== searchTicket || filters.fecha !== fecha) return;
+      dibujarResultados(ocup);
+      pintarCinta();
+    });
+  }
+  function dibujarResultados(ocup) {
     const list = conjuntoStations();
-    const evaluated = list.map((sp) => ({ sp, miss: evalStation(sp, filters) }));
+    pintarFiltroPuertos(); // el contador de cada conector vive de esta misma lista
+    const evaluated = list.map((sp) => ({ sp, miss: evalStation(sp, filters, ocup) }));
     const perfect = evaluated.filter((e) => e.miss.length === 0).map((e) => e.sp).sort(idealSort);
     const head = $('#resultsHead'), ul = $('#resultList'), empty = $('#resultEmpty');
     const esc = vaEscalonada(ul);
@@ -524,7 +768,7 @@
     if (!list.length) {
       head.innerHTML = '';
       empty.classList.remove('hidden');
-      empty.innerHTML = '<div class="empty-icon">🔌</div><p>Aún no hay puestos publicados en MontReal.</p><span>Sé el primero: publica el tuyo desde “Ofrezco mi cargador”.</span>';
+      empty.innerHTML = '<div class="empty-icon"><svg class="ico" aria-hidden="true"><use href="#i-plug"/></svg></div><p>Aún no hay puestos publicados en MontReal.</p><span>Sé el primero: publica el tuyo desde “Ofrezco mi cargador”.</span>';
       return;
     }
     if (perfect.length) {
@@ -553,26 +797,26 @@
         <div>
           <div class="sc-name">${escapeHtml(sp.nombre)}</div>
           <div class="sc-badges">
-            <span class="sc-badge b-torre">🏢 Torre ${escapeHtml(sp.torre || '—')}</span>
+            <span class="sc-badge b-torre"><svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> Torre ${escapeHtml(sp.torre || '—')}</span>
             <span class="sc-badge ${open ? 'b-ok' : 'b-off'}">${open ? '● Disponible ahora' : '○ Cerrado ahora'}</span>
             ${sp.ownerVerificado ? '<span class="sc-badge b-ver">✓ Vecino verificado</span>' : ''}
-            ${mine ? '<span class="sc-badge b-mine">★ Tu puesto</span>' : ''}
+            ${mine ? '<span class="sc-badge b-mine"><svg class="ico ico-fill" aria-hidden="true"><use href="#i-star"/></svg> Tu puesto</span>' : ''}
           </div>
         </div>
         <div class="sc-price"><b>${fmtCOP(sp.precio || 0)}</b><small>/ kWh</small></div>
       </div>
       <div class="sc-meta">
-        <span class="mtag${missBadge('Puerto')}">🔌 ${escapeHtml(sp.puerto || '—')}</span>
-        <span class="mtag${missBadge('Potencia')}">⚡ ${(sp.pow || 0).toLocaleString('es-CO')} kW</span>
-        <span class="mtag${missBadge('Tamaño')}">📐 ${escapeHtml(sp.tamano || '—')}</span>
-        <span class="sc-rating">★ ${avg ? avg.toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '—'} <small>(${sp.ratingCount || 0})</small></span>
+        <span class="mtag${missBadge('Puerto')}"><svg class="ico" aria-hidden="true"><use href="#i-plug"/></svg> ${escapeHtml(sp.puerto || '—')}</span>
+        <span class="mtag${missBadge('Potencia')}"><svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg> ${(sp.pow || 0).toLocaleString('es-CO')} kW</span>
+        <span class="mtag${missBadge('Tamaño')}"><svg class="ico" aria-hidden="true"><use href="#i-size"/></svg> ${escapeHtml(sp.tamano || '—')}</span>
+        <span class="sc-rating"><svg class="ico ico-fill" aria-hidden="true"><use href="#i-star"/></svg> ${avg ? avg.toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '—'} <small>(${sp.ratingCount || 0})</small></span>
       </div>
-      <div class="sc-avail${miss.includes('Disponibilidad') ? ' miss' : ''}">🗓️ ${availText(sp)}</div>
+      <div class="sc-avail${miss.includes('Disponibilidad') ? ' miss' : ''}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg> ${availText(sp)}</div>
       ${miss.length ? `<div class="miss-note">Cambia en: ${miss.map((m) => '<b>' + m + '</b>').join(', ')}</div>` : ''}
-      ${mine ? '<div class="sc-mine-note">Así ven tu puesto los vecinos 👀</div>' : `
+      ${mine ? '<div class="sc-mine-note">Así ven tu puesto los vecinos</div>' : `
       <div class="sc-actions">
         <button class="btn-ok sc-agendar" type="button">Agendar</button>
-        <button class="btn-ghost sc-chat" type="button">💬 Chatear</button>
+        <button class="btn-ghost sc-chat" type="button"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg> Chatear</button>
       </div>`}`;
     if (!mine) {
       li.querySelector('.sc-agendar').addEventListener('click', (e) => { e.stopPropagation(); openBookingSheet(sp); });
@@ -605,6 +849,50 @@
     return ocupados.some((s) => mios.has(s.hhmm) && s.driverUid !== (VB.uid() || ''));
   }
   const hhmmLabel = (h) => h.slice(0, 2) + ':' + h.slice(2);
+
+  /* La cinta del puesto dentro de la hoja de reserva.
+     Antes las horas ocupadas se avisaban en texto, debajo del formulario: había
+     que leer "🚫 Ya apartado: 08:00–10:30", entenderlo y traducirlo a mano a dos
+     campos de hora. Ahora lo ocupado no se puede tocar, así que el error deja de
+     ser posible en vez de ser avisado. */
+  let bkPend = null;
+  async function pintarCintaPuesto(sp) {
+    const box = $('#bkRib'); if (!box) return;
+    const fecha = $('#bkFecha') && $('#bkFecha').value;
+    if (!fecha) { box.innerHTML = ''; return; }
+    const abre = (sp.dias || [1, 1, 1, 1, 1, 1, 1])[parseYmd(fecha).getDay()];
+    const ocupados = await slotsDe(sp.id, fecha);
+    const yo = (VB && VB.uid()) || '';
+    const ajenos = new Set(ocupados.filter((s) => s.driverUid !== yo).map((s) => s.hhmm));
+    const desde = hToMin(sp.desde) / 60, hasta = hToMin(sp.hasta) / 60;
+    const from = $('#bkFrom').value, to = $('#bkTo').value;
+    const selA = hToMin(from) / 60, selB = hToMin(to) / 60;
+    const html = [];
+    for (let h = H_INI; h < H_FIN; h++) {
+      // Fuera del horario del anfitrión, o con algún cuarto ya apartado.
+      const fuera = !abre || h < Math.floor(desde) || h + 1 > Math.ceil(hasta);
+      const tomado = ['00', '15', '30', '45'].some((m) => ajenos.has(String(h).padStart(2, '0') + m));
+      const cerrado = fuera || tomado;
+      const sel = !cerrado && h >= selA && h < selB;
+      html.push(`<button type="button" class="rb-cell${sel ? ' sel' : ''}${cerrado ? ' closed' : ''}"
+        data-h="${h}" aria-pressed="${sel}"
+        aria-label="${hhmm(h)}: ${tomado ? 'ya apartado' : fuera ? 'fuera del horario' : 'libre'}">
+        <span class="bar" style="height:${cerrado ? 6 : 30}px"></span>
+        <span class="hh">${h % 3 === 0 ? h : ''}</span></button>`);
+    }
+    box.innerHTML = html.join('');
+    const r = $('#bkRange');
+    if (r) r.textContent = from + ' → ' + (to === '24:00' ? '00:00' : to);
+  }
+  function elegirFranjaPuesto(sp, h) {
+    if (bkPend === null) { bkPend = h; $('#bkFrom').value = hhmm(h); $('#bkTo').value = hhmm(h + 1); }
+    else {
+      if (h >= bkPend) { $('#bkFrom').value = hhmm(bkPend); $('#bkTo').value = hhmm(h + 1); }
+      else { $('#bkFrom').value = hhmm(h); $('#bkTo').value = hhmm(bkPend + 1); }
+      bkPend = null;
+    }
+    pintarCintaPuesto(sp); refrescarEstimado(sp); guardarBorrador(sp.id);
+  }
   /* Pinta bajo el formulario las horas que ya están tomadas ese día. */
   async function pintarOcupadas(sp) {
     const box = $('#bkBusy');
@@ -616,7 +904,7 @@
     const ajenos = ocupados.filter((s) => s.driverUid !== (VB.uid() || ''));
     if (!ajenos.length) {
       box.className = 'bk-busy bk-busy-free';
-      box.innerHTML = '✅ Ese día el puesto está libre a cualquier hora del horario del anfitrión.';
+      box.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Ese día el puesto está libre a cualquier hora del horario del anfitrión.';
       box.classList.remove('hidden');
       return;
     }
@@ -630,7 +918,7 @@
     }
     const fmt = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
     box.className = 'bk-busy';
-    box.innerHTML = '🚫 Ya apartado ese día: ' + rangos.map((r) => `<b>${fmt(r[0])}–${fmt(r[1])}</b>`).join(', ') +
+    box.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-ban"/></svg> Ya apartado ese día: ' + rangos.map((r) => `<b>${fmt(r[0])}–${fmt(r[1])}</b>`).join(', ') +
       '<small>Puedes empezar justo cuando otro termina: dejamos 15 minutos de relevo.</small>';
     box.classList.remove('hidden');
   }
@@ -678,7 +966,7 @@
       const el = $(s); if (!el) return;
       el.classList.toggle('hidden', !pendiente);
       if (pendiente) {
-        el.innerHTML = '<div><b>🔐 Te falta el código del conjunto</b><span>Puedes mirar la app, pero para reservar o publicar tu puesto necesitas el código que reparte la administración.</span></div>' +
+        el.innerHTML = '<div><b><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg> Te falta el código del conjunto</b><span>Puedes mirar la app, pero para reservar o publicar tu puesto necesitas el código que reparte la administración.</span></div>' +
           '<button class="btn-secondary btn-sm" type="button" data-gate="1">Escribir código</button>';
         const b = el.querySelector('[data-gate]');
         if (b) b.addEventListener('click', () => { goView('settings'); setTimeout(() => { const i = $('#acCodigo'); if (i) i.focus(); }, 400); });
@@ -722,7 +1010,7 @@
       el.classList.toggle('hidden', !hoyList.length);
       if (!hoyList.length) return;
       hoyList.sort((a, b) => hToMin(a.from) - hToMin(b.from));
-      el.innerHTML = '<span class="today-ico">📅</span><div>' + texto(hoyList) + '</div>';
+      el.innerHTML = '<span class="today-ico"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><div>' + texto(hoyList) + '</div>';
     };
     pinta('#todayRes', myBookings, (l) => {
       const b = l[0];
@@ -815,10 +1103,11 @@
     if (!user) { needLogin(); return; }
     sheetStation = sp;
     const bd = leerBorrador(sp.id);
-    const defDate = bd.fecha || (filters.day === 'hoy' ? ymd(new Date()) : filters.day === 'man' ? ymd(addDays(new Date(), 1)) : (filters.day === 'pick' && filters.date) ? filters.date : ymd(new Date()));
-    const [bs] = bandRange(filters.band);
-    const defFrom = bd.from || (filters.band !== 'any' ? String(bs).padStart(2, '0') + ':00' : (sp.desde || '08:00'));
-    const defTo = bd.to || sp.hasta || '20:00';
+    // La hoja llega con lo que la persona ya eligió en la búsqueda: si pidió el
+    // jueves de 18 a 21, no tiene por qué volver a decirlo acá.
+    const defDate = bd.fecha || filters.fecha || ymd(new Date());
+    const defFrom = bd.from || filters.from || sp.desde || '08:00';
+    const defTo = bd.to || filters.to || sp.hasta || '20:00';
     const c = $('#sheetContent');
     c.innerHTML = `
       <div class="sh-head">
@@ -831,16 +1120,25 @@
         <div class="sh-spec"><b>${escapeHtml(sp.tamano || '—')}</b><small>tamaño</small></div>
         <div class="sh-spec"><b>~${Math.round((sp.pow || 0) * (settings.kmPerKwh || 6))}</b><small>km/hora</small></div>
       </div>
-      <div class="sh-avail">🗓️ Disponible: ${availText(sp)}</div>
-      <div class="sh-pay">💳 Pagas con: ${[sp.breb ? '<b>Bre-B</b>' : '', sp.wompi ? '<b>tarjeta, PSE o Nequi</b>' : ''].filter(Boolean).join(' o ') || '<b>lo que acuerdes por el chat</b>'}</div>
+      <div class="sh-avail"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg> Disponible: ${availText(sp)}</div>
+      <div class="sh-pay"><svg class="ico" aria-hidden="true"><use href="#i-card"/></svg> Pagas con: ${[sp.breb ? '<b>Bre-B</b>' : '', sp.wompi ? '<b>tarjeta, PSE o Nequi</b>' : ''].filter(Boolean).join(' o ') || '<b>lo que acuerdes por el chat</b>'}</div>
       ${(sp.fotos && sp.fotos.length) ? `<div class="foto-strip">${sp.fotos.map((f, i) => `<img src="${escapeHtml(f)}" alt="Foto ${i + 1} de ${escapeHtml(sp.nombre)}" loading="lazy"/>`).join('')}</div>` : ''}
-      ${sp.condiciones ? `<div class="bk-pay" style="margin:0 0 14px">📋 ${escapeHtml(sp.condiciones)}</div>` : ''}
+      ${sp.condiciones ? `<div class="bk-pay" style="margin:0 0 14px"><svg class="ico" aria-hidden="true"><use href="#i-doc"/></svg> ${escapeHtml(sp.condiciones)}</div>` : ''}
       <h3 class="sub-h">Agenda tu carga</h3>
-      <div class="field"><label>Fecha</label><div class="input-wrap"><input id="bkFecha" type="date" min="${ymd(new Date())}" value="${defDate}"/></div></div>
-      <div class="grid-2" style="margin-top:10px">
-        <div class="field"><label>Desde</label><div class="input-wrap"><input id="bkFrom" type="time" value="${defFrom}"/></div></div>
-        <div class="field"><label>Hasta</label><div class="input-wrap"><input id="bkTo" type="time" value="${defTo}"/></div></div>
+      <div class="field"><label for="bkFecha">Fecha</label><div class="input-wrap"><input id="bkFecha" type="date" min="${ymd(new Date())}" value="${defDate}"/></div></div>
+      <div class="f-head" style="margin-top:14px">
+        <span class="field-label">Franja</span><span class="f-range" id="bkRange"></span>
       </div>
+      <div class="rib" id="bkRib" role="group" aria-label="Elegir la franja"></div>
+      <div class="rib-legend">
+        <span><i class="lg-free"></i> libre</span>
+        <span><i class="lg-sel"></i> tu carga</span>
+        <span><i class="lg-none"></i> apartado u horario cerrado</span>
+      </div>
+      <!-- La cinta escribe acá: el resto de la hoja (estimado, envío, borrador)
+           sigue leyendo estos dos campos, así no hubo que tocarlo. -->
+      <input id="bkFrom" type="hidden" value="${defFrom}"/>
+      <input id="bkTo" type="hidden" value="${defTo}"/>
       <div class="bk-busy hidden" id="bkBusy"></div>
 
       <h3 class="sub-h">¿Cuánta energía vas a cargar?</h3>
@@ -861,7 +1159,7 @@
       <div class="sh-est"><span>Costo estimado</span><b id="bkEst">${fmtCOP(0)}</b></div>
       <p class="hint bk-est-nota">Es un cálculo aproximado para que sepas a qué atenerte. <b>El cobro real lo hace el anfitrión con la lectura del contador</b> al terminar la carga.</p>
       <button id="bkSend" class="btn-primary" type="button" style="margin-top:14px"><span class="btn-glow"></span>Enviar solicitud de reserva</button>
-      <button id="bkChat" class="btn-ghost btn-block" type="button" style="margin-top:10px">💬 Prefiero preguntarle primero</button>
+      <button id="bkChat" class="btn-ghost btn-block" type="button" style="margin-top:10px"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg> Prefiero preguntarle primero</button>
       <p class="hint" style="text-align:center;margin-top:8px">${sp.demo ? 'Puesto de ejemplo: la confirmación es simulada.' : 'El anfitrión recibirá tu solicitud al instante y podrá aceptarla o declinarla.'}</p>`;
     openSheet('#spotSheet');
     bkModo = bd.modo === 'manual' ? 'manual' : 'auto';
@@ -876,11 +1174,18 @@
       if (bkModo === 'manual') setTimeout(() => $('#bkKwh').focus(), 60);
     }));
     $('#bkKwh').addEventListener('input', () => refrescarEstimado(sp));
-    ['#bkFrom', '#bkTo'].forEach((s) => $(s).addEventListener('change', () => refrescarEstimado(sp)));
+    $('#bkRib').addEventListener('click', (e) => {
+      const c = e.target.closest('.rb-cell'); if (!c || c.classList.contains('closed')) return;
+      elegirFranjaPuesto(sp, +c.dataset.h);
+    });
     $('#bkSend').addEventListener('click', () => submitBooking(sp));
     $('#bkChat').addEventListener('click', () => startChatWith(sp));
-    $('#bkFecha').addEventListener('change', () => { pintarOcupadas(sp); guardarBorrador(sp.id); });
-    pintarOcupadas(sp);
+    $('#bkFecha').addEventListener('change', () => {
+      bkPend = null;
+      pintarCintaPuesto(sp); pintarOcupadas(sp); guardarBorrador(sp.id);
+    });
+    bkPend = null;
+    pintarCintaPuesto(sp); pintarOcupadas(sp);
   }
   async function submitBooking(sp) {
     const fecha = $('#bkFecha').value, from = $('#bkFrom').value, to = $('#bkTo').value;
@@ -979,7 +1284,7 @@
       window.VW.remember({ bookingId, reference: ck.reference, amountInCents: ck.amountInCents, pubKey: cfg.pubKey, stationId: bk.stationId });
       location.href = ck.url;
     } catch (e) {
-      if (btn) { btn.disabled = false; btn.innerHTML = '💳 Pagar en línea'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-card"/></svg> Pagar en línea'; }
       toast(e.message || 'No pudimos abrir el pago', 'error');
     }
   }
@@ -1005,7 +1310,7 @@
       window.VW.forget();
       const tabs = TABS[effectiveMode()] || [];
       if (tabs.includes('reservas')) goView('reservas');
-      if (v.ok) { successPop(); toast('¡Pago aprobado! ✅ El anfitrión ya lo verá confirmado'); }
+      if (v.ok) { successPop(); toast('¡Pago aprobado! El anfitrión ya lo verá confirmado'); }
       else toast(v.motivo || 'El pago no quedó aprobado', 'error');
     } catch (e) {
       toast('No pudimos confirmar el pago con Wompi. Revisa tu reserva en un momento.', 'error');
@@ -1042,32 +1347,32 @@
   /* ---------- Bloque de pago que ve el vecino en su reserva ---------- */
   function payBlock(bk) {
     if (bk.estado !== 'confirmada' && bk.estado !== 'completada') return '';
-    const puesto = `📍 Tu puesto: <span class="bk-key">${escapeHtml(bk.numeroParqueadero || 'coordinar por chat')}</span>`;
+    const puesto = `Tu puesto: <span class="bk-key">${escapeHtml(bk.numeroParqueadero || 'coordinar por chat')}</span>`;
     const total = bk.totalReal || bk.total;
 
     if (bk.pagado) {
       const via = bk.pagoMetodo === 'wompi' ? 'Pago en línea verificado con Wompi' : escapeHtml(bk.ownerName || 'El anfitrión') + ' confirmó que recibió tu pago';
-      return `<div class="bk-pay bk-paid">${puesto}<div class="bk-paid-line">✅ ${via} de <b>${fmtCOP(total)}</b>. ¡Todo en orden!</div></div>`;
+      return `<div class="bk-pay bk-paid">${puesto}<div class="bk-paid-line"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> ${via} de <b>${fmtCOP(total)}</b>. ¡Todo en orden!</div></div>`;
     }
     if (bk.wompiTxId && bk.wompiStatus === 'APPROVED') {
-      return `<div class="bk-pay bk-paid">${puesto}<div class="bk-paid-line">✅ Wompi aprobó tu pago de <b>${fmtCOP(total)}</b>. El anfitrión lo verá confirmado en su app.</div></div>`;
+      return `<div class="bk-pay bk-paid">${puesto}<div class="bk-paid-line"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Wompi aprobó tu pago de <b>${fmtCOP(total)}</b>. El anfitrión lo verá confirmado en su app.</div></div>`;
     }
 
     const breb = brebDe(bk), wompi = aceptaWompi(bk);
     const pendiente = bk.wompiTxId && bk.wompiStatus === 'PENDING'
-      ? '<div class="bk-note">⏳ Tu pago está en proceso en el banco. Te avisamos cuando Wompi lo apruebe.</div>' : '';
+      ? '<div class="bk-note"><svg class="ico" aria-hidden="true"><use href="#i-hourglass"/></svg> Tu pago está en proceso en el banco. Te avisamos cuando Wompi lo apruebe.</div>' : '';
     const rechazado = bk.wompiTxId && (bk.wompiStatus === 'DECLINED' || bk.wompiStatus === 'ERROR')
-      ? '<div class="bk-note bk-note-bad">✋ El último intento de pago no pasó. Puedes reintentar o pagar por Bre-B.</div>' : '';
+      ? '<div class="bk-note bk-note-bad"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg> El último intento de pago no pasó. Puedes reintentar o pagar por Bre-B.</div>' : '';
 
     const lineaBreb = breb
       ? `<br/>Paga por <b>Bre-B</b> a <span class="bk-key">${escapeHtml(breb)}</span>${bk.banco ? ' · ' + escapeHtml(bk.banco) : ''} · ${escapeHtml(bk.titular || bk.ownerName || '')}`
       : (wompi ? '<br/>Este puesto recibe el pago <b>en línea</b>.' : '<br/>Coordina el pago con el anfitrión por el chat.');
 
     const acciones = [];
-    if (wompi) acciones.push(`<button class="btn-ok btn-sm" data-wompi="${bk.id}">💳 Pagar ${fmtCOP(total)} en línea</button>`);
+    if (wompi) acciones.push(`<button class="btn-ok btn-sm" data-wompi="${bk.id}"><svg class="ico" aria-hidden="true"><use href="#i-card"/></svg> Pagar ${fmtCOP(total)} en línea</button>`);
     if (breb) {
       acciones.push(`<button class="btn-ghost btn-sm" data-copy="${escapeHtml(breb)}">Copiar llave</button>`);
-      acciones.push(`<button class="${wompi ? 'btn-ghost' : 'btn-ok'} btn-sm" data-qr="${bk.id}">💳 Bre-B / QR</button>`);
+      acciones.push(`<button class="${wompi ? 'btn-ghost' : 'btn-ok'} btn-sm" data-qr="${bk.id}"><svg class="ico" aria-hidden="true"><use href="#i-card"/></svg> Bre-B / QR</button>`);
     }
     const nota = wompi && !bk.totalReal
       ? '<div class="bk-note">El monto es el estimado de la reserva. Si prefieres pagar lo exacto, espera a que el anfitrión mida la carga.</div>' : '';
@@ -1091,13 +1396,13 @@
       const fx = parseYmd(bk.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(bk.stationName)}</div><div class="bk-sub">de ${escapeHtml(bk.ownerName || '')} · Torre ${escapeHtml(bk.torre || '—')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
-        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(bk.from)}–${escapeHtml(bk.to)}</span><span>💰 ${bk.totalReal ? fmtCOP(bk.totalReal) : fmtCOP(bk.total) + ' aprox.'}</span>${bk.kwhReal ? `<span>🔋 ${fmtKwh(bk.kwhReal)} kWh medidos</span>` : ''}</div>
+        <div class="bk-meta"><span><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg> ${fx}</span><span><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg> ${escapeHtml(bk.from)}–${escapeHtml(bk.to)}</span><span><svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> ${bk.totalReal ? fmtCOP(bk.totalReal) : fmtCOP(bk.total) + ' aprox.'}</span>${bk.kwhReal ? `<span><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg> ${fmtKwh(bk.kwhReal)} kWh medidos</span>` : ''}</div>
         ${payBlock(bk)}
-        ${bk.estado === 'rechazada' && bk.rejectReason ? `<div class="bk-pay p-rej">✋ Motivo: ${escapeHtml(bk.rejectReason)}</div>` : ''}
+        ${bk.estado === 'rechazada' && bk.rejectReason ? `<div class="bk-pay p-rej"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg> Motivo: ${escapeHtml(bk.rejectReason)}</div>` : ''}
         <div class="bk-actions">
-          <button class="btn-ghost btn-sm" data-chat="${bk.id}">💬 Chat</button>
+          <button class="btn-ghost btn-sm" data-chat="${bk.id}"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg> Chat</button>
           ${(bk.estado === 'pendiente' || bk.estado === 'confirmada') ? `<button class="btn-ghost btn-sm btn-danger" data-cancel="${bk.id}">Cancelar</button>` : ''}
-          ${(bk.estado === 'confirmada' || bk.estado === 'completada') && !bk.ratedByDriver ? `<button class="btn-ok" data-rate="${bk.id}">⭐ Calificar</button>` : ''}
+          ${(bk.estado === 'confirmada' || bk.estado === 'completada') && !bk.ratedByDriver ? `<button class="btn-ok" data-rate="${bk.id}"><svg class="ico ico-fill" aria-hidden="true"><use href="#i-star"/></svg> Calificar</button>` : ''}
           ${bk.ratedByDriver ? '<span class="sc-badge b-ok">✓ Calificado</span>' : ''}
         </div>`;
       ul.appendChild(li);
@@ -1105,7 +1410,7 @@
     });
     persistSeen();
     $$('#bookList [data-cancel]').forEach((b) => b.addEventListener('click', () => cancelarReserva(b.dataset.cancel)));
-    $$('#bookList [data-copy]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Llave copiada 📋'); } catch (e) {} }));
+    $$('#bookList [data-copy]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Llave copiada'); } catch (e) {} }));
     $$('#bookList [data-wompi]').forEach((b) => b.addEventListener('click', () => payWithWompi(b.dataset.wompi)));
     $$('#bookList [data-qr]').forEach((b) => b.addEventListener('click', () => {
       const bk = myBookings.find((x) => x.id === b.dataset.qr); if (!bk) return;
@@ -1161,33 +1466,33 @@
       const fx = parseYmd(rq.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(rq.driverName || 'Vecino')}</div><div class="bk-sub">quiere ${escapeHtml(rq.stationName || 'tu puesto')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
-        <div class="bk-meta"><span>🗓️ ${fx}</span><span>🕐 ${escapeHtml(rq.from)}–${escapeHtml(rq.to)}</span><span>⚡ ${rq.kwhReal ? fmtKwh(rq.kwhReal) + ' kWh medidos' : '~' + fmtKwh(rq.kwhEst) + ' kWh'}</span><span>💰 ${fmtCOP(rq.totalReal || rq.total)}</span>${rq.pagado ? `<span class="meta-paid">${rq.pagoMetodo === 'wompi' ? '💳 Pagado en línea' : '💵 Pago recibido'}</span>` : (rq.wompiTxId ? '<span class="meta-pend">⏳ Pago en línea en proceso</span>' : '')}</div>
+        <div class="bk-meta"><span><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg> ${fx}</span><span><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg> ${escapeHtml(rq.from)}–${escapeHtml(rq.to)}</span><span><svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg> ${rq.kwhReal ? fmtKwh(rq.kwhReal) + ' kWh medidos' : '~' + fmtKwh(rq.kwhEst) + ' kWh'}</span><span><svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> ${fmtCOP(rq.totalReal || rq.total)}</span>${rq.pagado ? `<span class="meta-paid">${rq.pagoMetodo === 'wompi' ? '<svg class="ico" aria-hidden="true"><use href="#i-card"/></svg> Pagado en línea' : '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pago recibido'}</span>` : (rq.wompiTxId ? '<span class="meta-pend"><svg class="ico" aria-hidden="true"><use href="#i-hourglass"/></svg> Pago en línea en proceso</span>' : '')}</div>
         <div class="bk-actions">
-          <button class="btn-ghost btn-sm" data-chat="${rq.id}">💬 Chat</button>
+          <button class="btn-ghost btn-sm" data-chat="${rq.id}"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg> Chat</button>
           ${rq.estado === 'pendiente' ? `<button class="btn-ok" data-acc="${rq.id}">Aceptar</button><button class="btn-ghost btn-danger" data-rej="${rq.id}">Declinar</button>` : ''}
           ${rq.estado === 'confirmada' ? `<button class="btn-ghost btn-sm" data-done="${rq.id}">Completada</button>` : ''}
-          ${(rq.estado === 'confirmada' || rq.estado === 'completada') ? `<button class="${rq.pagado ? 'btn-ghost btn-sm' : 'btn-ok btn-sm'}" data-pay="${rq.id}">${rq.pagado ? 'Marcar sin pagar' : '💵 Ya me pagó'}</button>` : ''}
+          ${(rq.estado === 'confirmada' || rq.estado === 'completada') ? `<button class="${rq.pagado ? 'btn-ghost btn-sm' : 'btn-ok btn-sm'}" data-pay="${rq.id}">${rq.pagado ? 'Marcar sin pagar' : '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Ya me pagó'}</button>` : ''}
         </div>`;
       ul.appendChild(li);
     });
     animarReordenamiento(ul, posiciones);
     $$(ulSel + ' [data-acc]').forEach((b) => b.addEventListener('click', () => acceptRequest(b.dataset.acc)));
     $$(ulSel + ' [data-rej]').forEach((b) => b.addEventListener('click', () => openReject(b.dataset.rej)));
-    $$(ulSel + ' [data-done]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.done, { estado: 'completada' }).then(() => toast('Carga completada 🔋'))));
+    $$(ulSel + ' [data-done]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.done, { estado: 'completada' }).then(() => toast('Carga completada'))));
     $$(ulSel + ' [data-pay]').forEach((b) => b.addEventListener('click', () => toggleBookingPaid(b.dataset.pay)));
     $$(ulSel + ' [data-chat]').forEach((b) => b.addEventListener('click', () => { const rq = myRequests.find((x) => x.id === b.dataset.chat); if (rq) startChatWith({ id: rq.stationId, nombre: rq.stationName, ownerUid: rq.ownerUid, ownerName: rq.driverName, demo: rq.demo }, rq.driverUid); }));
   }
   function acceptRequest(id) {
     const rq = myRequests.find((x) => x.id === id);
     const num = (myStationDoc && myStationDoc.numeroParqueadero) || '';
-    VB.updateBooking(id, { estado: 'confirmada', numeroParqueadero: num }).then(() => { successPop(); toast('Reserva aceptada ✅ Avisamos a ' + ((rq && rq.driverName) || 'el vecino').split(' ')[0]); });
+    VB.updateBooking(id, { estado: 'confirmada', numeroParqueadero: num }).then(() => { successPop(); toast('Reserva aceptada Avisamos a ' + ((rq && rq.driverName) || 'el vecino').split(' ')[0]); });
   }
   // El anfitrión confirma que la transferencia Bre-B llegó: cierra el ciclo del pago.
   function toggleBookingPaid(id) {
     const rq = myRequests.find((x) => x.id === id); if (!rq) return;
     const marcar = !rq.pagado;
     VB.markBookingPaid(id, marcar)
-      .then(() => { if (marcar) successPop(); toast(marcar ? 'Pago confirmado 💵 El vecino ya lo ve' : 'Pago marcado como pendiente'); })
+      .then(() => { if (marcar) successPop(); toast(marcar ? 'Pago confirmado <svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> El vecino ya lo ve' : 'Pago marcado como pendiente'); })
       .catch(() => toast('No se pudo registrar el pago', 'error'));
   }
 
@@ -1263,7 +1568,7 @@
       await VB.updateStationFields(myStationDoc.id, { dias: spDias.slice(), desde: $('#avDesde').value || '07:00', hasta: $('#avHasta').value || '21:00' });
       myStationDoc.dias = spDias.slice(); myStationDoc.desde = $('#avDesde').value; myStationDoc.hasta = $('#avHasta').value;
       renderCalendar('#calHost', myRequests, 'host');
-      toast('Horario actualizado ⏰');
+      toast('Horario actualizado');
     } catch (e) { toast('No se pudo guardar', 'error'); }
   }
 
@@ -1291,7 +1596,7 @@
   }
   function loadPuestoForm(sp) {
     $('#spName').value = sp.nombre || ''; selectWithFallback('#spTorre', sp.torre || ''); $('#spNum').value = sp.numeroParqueadero || '';
-    $('#spSize').value = sp.tamano || 'Mediano'; $('#spPort').value = sp.puerto || 'Tipo 2';
+    $('#spSize').value = sp.tamano || 'Mediano'; pintarSelectorPuerto('#spPort', sp.puerto || 'Tipo 2');
     setPotencia(sp.pow || 7.4);
     $('#spCond').value = sp.condiciones || ''; $('#spPrecio').value = sp.precio || ''; $('#spFee').value = sp.serviceFee || ''; $('#spDesc').value = sp.discount || '';
     $('#spBreb').value = sp.breb || ''; $('#spTitular').value = sp.titular || '';
@@ -1405,11 +1710,11 @@
     if (window.VW.isConfigured(cfg)) {
       el.className = 'hint hint-ok';
       el.textContent = window.VW.isTest(cfg.pubKey)
-        ? '🧪 Modo de prueba: los pagos son simulados, no mueven dinero real. Perfecto para ensayar.'
-        : '✅ Listo para recibir pagos reales de tus vecinos.';
+        ? 'Modo de prueba: los pagos son simulados, no mueven dinero real. Perfecto para ensayar.'
+        : '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Listo para recibir pagos reales de tus vecinos.';
     } else {
       el.className = 'hint hint-warn';
-      el.textContent = '⚠️ ' + window.VW.configError(cfg);
+      el.textContent = '<svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg> ' + window.VW.configError(cfg);
     }
   }
   async function savePuesto() {
@@ -1433,7 +1738,7 @@
     const data = {
       conjunto: CONJUNTO, nombre, torre: $('#spTorre').value.trim(), numeroParqueadero: $('#spNum').value.trim(),
       wompi: wompiOn, ownerVerificado: esVecino(),
-      tamano: $('#spSize').value, puerto: $('#spPort').value, pow: pow,
+      tamano: $('#spSize').value, puerto: valorSelectorPuerto('#spPort'), pow: pow,
       condiciones: $('#spCond').value.trim(),
       precio: Math.max(0, Math.round(parseNum($('#spPrecio').value))) || settings.pricePerKwh,
       serviceFee: Math.max(0, Math.round(parseNum($('#spFee').value))), discount: Math.max(0, Math.round(parseNum($('#spDesc').value))),
@@ -1456,7 +1761,7 @@
       myStationDoc = Object.assign({ id }, myStationDoc || {}, data);
       renderPuesto();
       successPop();
-      toast('¡Tu puesto quedó publicado en MontReal! ⚡');
+      toast('¡Tu puesto quedó publicado en MontReal!');
     } catch (e) { toast('No se pudo publicar: ' + e.message, 'error'); }
     finally { $('#spSave').disabled = false; $('#spSave').innerHTML = '<span class="btn-glow"></span>Publicar mi puesto'; }
   }
@@ -1492,7 +1797,7 @@
   function chatRow(ch, uidv) {
     const other = (ch.names && Object.keys(ch.names).filter((k) => k !== uidv).map((k) => ch.names[k])[0]) || 'Chat';
     const li = document.createElement('li'); li.className = 'book-card'; li.style.cursor = 'pointer';
-    li.innerHTML = `<div class="bk-top"><div><div class="bk-name">💬 ${escapeHtml(ch.stationName || other)}</div><div class="bk-sub">${escapeHtml(other)}${ch.lastMsg ? ' · ' + escapeHtml(ch.lastMsg) : ''}</div></div><span class="bk-sub">${tsDate(ch.lastAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</span></div>`;
+    li.innerHTML = `<div class="bk-top"><div><div class="bk-name"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg> ${escapeHtml(ch.stationName || other)}</div><div class="bk-sub">${escapeHtml(other)}${ch.lastMsg ? ' · ' + escapeHtml(ch.lastMsg) : ''}</div></div><span class="bk-sub">${tsDate(ch.lastAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</span></div>`;
     li.addEventListener('click', () => openChatSheet({ chatId: ch.id, title: ch.stationName || other, sub: 'con ' + other, demo: !!ch.demo }));
     return li;
   }
@@ -1516,7 +1821,7 @@
         if (dk !== lastDay) { lastDay = dk; html += `<div class="msg-day">${d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</div>`; }
         html += `<div class="msg ${m.from === uidv ? 'msg-out' : 'msg-in'}">${escapeHtml(m.text)}<span class="msg-time">${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span></div>`;
       });
-      if (!msgs.length) html = '<div class="msg-day">Escribe el primer mensaje 👋</div>';
+      if (!msgs.length) html = '<div class="msg-day">Escribe el primer mensaje</div>';
       if (ctx.demo) html += '<div class="chat-demo-note">Puesto de ejemplo: el anfitrión no responderá.</div>';
       box.innerHTML = html;
       /* El hilo entero se reconstruye en cada cambio, así que animar .msg a
@@ -1553,7 +1858,7 @@
     if (!rateCtx) return; if (!rateStars) { toast('Elige de 1 a 5 estrellas', 'error'); return; }
     try {
       await VB.submitRating({ bookingId: rateCtx.bookingId || null, stationId: rateCtx.stationId || null, stars: rateStars, comment: $('#rtComment').value.trim().slice(0, 300), tipo: rateCtx.tipo });
-      closeSheet('#rateSheet'); successPop(); toast('¡Gracias por calificar! ⭐');
+      closeSheet('#rateSheet'); successPop(); toast('¡Gracias por calificar!');
     } catch (e) { toast('No se pudo enviar', 'error'); }
   }
 
@@ -1607,7 +1912,7 @@
       try { spotFotos.push(await compressImageFile(f, 720, 0.6)); ok++; } catch (e) { /* archivo no válido */ }
     }
     renderSpotFotos();
-    toast(ok ? (ok === 1 ? 'Foto agregada 📷' : ok + ' fotos agregadas 📷') : 'No pudimos procesar esas imágenes', ok ? undefined : 'error');
+    toast(ok ? (ok === 1 ? 'Foto agregada <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>' : ok + ' fotos agregadas <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>') : 'No pudimos procesar esas imágenes', ok ? undefined : 'error');
   }
   function findStation(id) { return stations.find((s) => s.id === id) || allStations.find((s) => s.id === id) || null; }
   function openQrView(opts) {
@@ -1624,7 +1929,7 @@
       ${opts.breb ? `<button class="btn-secondary btn-block" id="qrCopy" type="button">Copiar llave Bre-B</button>` : ''}
       <p class="hint" style="text-align:center;margin-top:8px">Abre tu banco, escanea el QR o usa la llave, y transfiere el total acordado.</p>`;
     openSheet('#qrSheet');
-    if (opts.breb) $('#qrCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(opts.breb); toast('Llave copiada 📋'); } catch (e) {} });
+    if (opts.breb) $('#qrCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(opts.breb); toast('Llave copiada'); } catch (e) {} });
   }
 
   /* =========================================================
@@ -1711,21 +2016,26 @@
     }, { ingresos: 0, kwh: 0, count: 0, pagado: 0, pendiente: 0 });
   }
 
-  function countUp(el, to, fmt, dur) {
-    const d = dur || 800;
-    if (!settings.animations || prefersReduced() || document.visibilityState === 'hidden') { el.textContent = fmt(to); return; }
+  /* Cuenta de `from` (0 la primera vez) hasta `to`. Guarda su parada en el
+     propio nodo: si llega un dato nuevo a media cuenta, la anterior se cancela
+     en vez de pelearse con ella por el mismo texto. */
+  function countUp(el, to, fmt, dur, from) {
+    const d = dur || 800, ini = from || 0;
+    if (el.__cuStop) el.__cuStop();
+    if (!settings.animations || prefersReduced() || document.visibilityState === 'hidden' || Math.abs(to - ini) < 0.005) { el.textContent = fmt(to); return; }
     const t0 = performance.now();
-    let done = false;
-    const settle = () => { if (!done) { done = true; el.textContent = fmt(to); } };
+    let done = false, timer = 0;
+    const settle = () => { if (!done) { done = true; clearTimeout(timer); el.__cuStop = null; el.textContent = fmt(to); } };
+    el.__cuStop = settle;
     (function step(now) {
       const p = clamp((now - t0) / d, 0, 1);
       if (done) return;
-      el.textContent = fmt(to * (1 - Math.pow(1 - p, 3)));
+      el.textContent = fmt(ini + (to - ini) * (1 - Math.pow(1 - p, 3)));
       if (p < 1) requestAnimationFrame(step); else settle();
     })(performance.now());
     // Red de seguridad: si rAF no corre (pestaña oculta, equipo lento) el dato
     // nunca se queda en cero — siempre termina mostrando el valor real.
-    setTimeout(settle, d + 120);
+    timer = setTimeout(settle, d + 120);
   }
   function adminStats() {
     const t = sumEvents(mergedEvents());
@@ -1735,19 +2045,33 @@
       puestos: panelStations().length
     };
   }
+  /* Lo último que se mostró en cada tarjeta, para que un dato que llega tarde
+     continúe la cuenta desde donde iba y no la reinicie en cero. */
+  const metricShown = {};
   function renderAdminMetrics() {
     const st = adminStats(), wrap = $('#admMetrics');
     const cards = [
-      { ico: '💰', label: 'Ingresos', val: st.ingresos, fmt: (v) => fmtCOP(v) },
-      { ico: '⚡', label: 'Energía', val: st.kwh, fmt: (v) => fmtKwh(v) + ' kWh' },
-      { ico: '🔋', label: 'Cargas', val: st.cargas, fmt: (v) => fmtNum(Math.round(v)) },
-      { ico: '💵', label: 'Por cobrar', val: st.pendiente, fmt: (v) => fmtCOP(v) },
-      { ico: '🗓️', label: 'Reservas', val: st.reservas, fmt: (v) => fmtNum(Math.round(v)) },
-      { ico: '🔌', label: 'Puestos', val: st.puestos, fmt: (v) => fmtNum(Math.round(v)) }
+      { ico: '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg>', label: 'Ingresos', val: st.ingresos, fmt: (v) => fmtCOP(v) },
+      { ico: '<svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg>', label: 'Energía', val: st.kwh, fmt: (v) => fmtKwh(v) + ' kWh' },
+      { ico: '<svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>', label: 'Cargas', val: st.cargas, fmt: (v) => fmtNum(Math.round(v)) },
+      { ico: '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg>', label: 'Por cobrar', val: st.pendiente, fmt: (v) => fmtCOP(v) },
+      { ico: '<svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg>', label: 'Reservas', val: st.reservas, fmt: (v) => fmtNum(Math.round(v)) },
+      { ico: '<svg class="ico" aria-hidden="true"><use href="#i-plug"/></svg>', label: 'Puestos', val: st.puestos, fmt: (v) => fmtNum(Math.round(v)) }
     ];
-    const esc = vaEscalonada(wrap);
-    wrap.innerHTML = cards.map((c, i) => `<div class="metric-card${esc ? ' stagger' : ''}" style="--i:${i}"><span class="metric-ico">${c.ico}</span><b class="metric-val" data-i="${i}">${c.fmt(0)}</b><span class="metric-label">${c.label}</span></div>`).join('');
-    cards.forEach((c, i) => { const el = wrap.querySelector('.metric-val[data-i="' + i + '"]'); if (el) countUp(el, c.val, c.fmt, 900); });
+    // Las tarjetas se arman UNA vez. Después solo cambia el número de adentro:
+    // reconstruir el HTML las devolvía a `fmt(0)` y repetía la entrada.
+    const primera = wrap.children.length !== cards.length;
+    if (primera) {
+      const esc = vaEscalonada(wrap);
+      wrap.innerHTML = cards.map((c, i) => `<div class="metric-card${esc ? ' stagger' : ''}" style="--i:${i}"><span class="metric-ico">${c.ico}</span><b class="metric-val" data-i="${i}">${c.fmt(0)}</b><span class="metric-label">${c.label}</span></div>`).join('');
+    }
+    cards.forEach((c, i) => {
+      const el = wrap.querySelector('.metric-val[data-i="' + i + '"]');
+      if (!el) return;
+      const desde = primera ? 0 : (metricShown[i] || 0);
+      metricShown[i] = c.val;
+      countUp(el, c.val, c.fmt, primera ? 900 : 420, desde);
+    });
   }
   function adminDailyBuckets(events) {
     const days = [], now = new Date();
@@ -1758,9 +2082,17 @@
     });
     return days;
   }
+  let admChartFirma = '';
   function renderAdminChart() {
-    const A = $('#admChartA'); if (!A) return; A.classList.remove('chart-in'); A.innerHTML = '';
+    const A = $('#admChartA'); if (!A) return;
     const bk = adminDailyBuckets(mergedEvents()), metric = admChart.metric;
+    // Redibujar vacía el SVG, y vaciarlo devuelve las barras a scaleY(0) para
+    // que vuelvan a crecer. Con tres suscripciones llegando seguidas eso se veía
+    // como un derrumbe. Si los datos son los mismos, no se toca nada.
+    const firma = metric + '|' + bk.map((b) => b.key + ':' + b.cop + ':' + b.kwh).join(',');
+    if (firma === admChartFirma && A.firstChild) return;
+    admChartFirma = firma;
+    A.classList.remove('chart-in'); A.innerHTML = '';
     drawBars(A, bk, metric);
     const tot = bk.reduce((a, b) => a + (metric === 'cop' ? b.cop : b.kwh), 0);
     $('#admChartFootA').innerHTML = `<span>Total del período</span><b>${metric === 'cop' ? fmtCOP(tot) : fmtKwh(tot) + ' kWh'}</b>`;
@@ -1789,8 +2121,8 @@
     $('#admSpotsEmpty').classList.toggle('hidden', spots.length > 0);
     spots.forEach((sp, i) => {
       const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc);
-      li.innerHTML = `<div class="bk-top"><div><div class="bk-name">${escapeHtml(sp.nombre)}</div><div class="bk-sub">🅿️ ${escapeHtml(sp.numeroParqueadero || '—')} · ${escapeHtml(sp.puerto || '')} · ${(sp.pow || 0)} kW</div></div><span class="bk-pill ${sp.visible !== false ? 'p-ok' : 'p-dim'}">${sp.visible !== false ? 'Visible' : 'Oculto'}</span></div>
-        <div class="bk-meta"><span>💰 ${fmtCOP(sp.precio || 0)}/kWh</span><span>🕐 ${escapeHtml(sp.desde || '—')}–${escapeHtml(sp.hasta || '—')}</span>${sp.breb ? `<span>💳 ${escapeHtml(sp.breb)}</span>` : ''}</div>
+      li.innerHTML = `<div class="bk-top"><div><div class="bk-name">${escapeHtml(sp.nombre)}</div><div class="bk-sub"><svg class="ico" aria-hidden="true"><use href="#i-parking"/></svg> ${escapeHtml(sp.numeroParqueadero || '—')} · ${escapeHtml(sp.puerto || '')} · ${(sp.pow || 0)} kW</div></div><span class="bk-pill ${sp.visible !== false ? 'p-ok' : 'p-dim'}">${sp.visible !== false ? 'Visible' : 'Oculto'}</span></div>
+        <div class="bk-meta"><span><svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> ${fmtCOP(sp.precio || 0)}/kWh</span><span><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg> ${escapeHtml(sp.desde || '—')}–${escapeHtml(sp.hasta || '—')}</span>${sp.breb ? `<span><svg class="ico" aria-hidden="true"><use href="#i-card"/></svg> ${escapeHtml(sp.breb)}</span>` : ''}</div>
         <div class="bk-actions"><button class="btn-ghost btn-sm" data-edit="${escapeHtml(sp.id)}">Editar</button><button class="btn-ghost btn-sm btn-danger" data-del="${escapeHtml(sp.id)}">Eliminar</button></div>`;
       ul.appendChild(li);
     });
@@ -1800,6 +2132,23 @@
   function renderPanel() {
     if (!isAdmin()) return;
     renderAdminMetrics(); renderAdminChart(); renderReporte(); renderTopSpots(); renderCommonSpots();
+  }
+  /* Al abrir el panel entran tres suscripciones de Firestore por separado
+     —puestos, sesiones y reservas del conjunto— y cada una pedía su propio
+     re-dibujo unos milisegundos después de la anterior. El resultado: las cifras
+     volvían a cero y se contaban de nuevo tres o cuatro veces, y las barras de
+     la gráfica se aplastaban y crecían con ellas. Aquí se juntan todas las que
+     caigan en el mismo frame en un solo dibujo. */
+  let panelPend = false;
+  function pedirPanel() {
+    if (!isAdmin() || currentView !== 'panel') return;
+    if (panelPend) return;
+    panelPend = true;
+    const ya = () => { if (panelPend) { panelPend = false; renderPanel(); } };
+    // Con la pestaña de fondo rAF no corre: sin el temporizador la bandera se
+    // quedaría levantada y el panel no volvería a refrescarse nunca más.
+    requestAnimationFrame(ya);
+    setTimeout(ya, 250);
   }
 
   /* =========================================================
@@ -1873,7 +2222,13 @@
     const sel = $('#admRepMonth'); if (!sel) return;
     const months = availableMonths();
     if (!repState.month || months.indexOf(repState.month) < 0) repState.month = months[0];
-    sel.innerHTML = months.map((k) => `<option value="${k}"${k === repState.month ? ' selected' : ''}>${escapeHtml(monthLabel(k))}</option>`).join('');
+    // Reconstruir el <select> cierra la lista nativa si está abierta. Solo se
+    // rehace cuando de verdad cambian los meses disponibles.
+    if (sel.dataset.meses !== months.join(',')) {
+      sel.dataset.meses = months.join(',');
+      sel.innerHTML = months.map((k) => `<option value="${k}">${escapeHtml(monthLabel(k))}</option>`).join('');
+    }
+    if (sel.value !== repState.month) sel.value = repState.month;
 
     const rep = buildReporte(repState.month), t = rep._tot;
     $('#admRepOrigen').textContent = t.count ? (t.count === 1 ? '1 movimiento' : t.count + ' movimientos') : '';
@@ -1896,8 +2251,8 @@
     if (!rep._tot.count) { toast('Ese mes no tiene movimientos', 'error'); return; }
     const name = 'voltio-montreal-' + repState.month + '.' + (kind === 'pdf' ? 'pdf' : 'csv');
     try {
-      if (kind === 'pdf') { download(name, window.VReporte.pdf(rep), 'application/pdf'); toast('Reporte en PDF descargado 📄'); }
-      else { download(name, window.VReporte.csv(rep), 'text/csv;charset=utf-8'); toast('Reporte en CSV descargado ⬇'); }
+      if (kind === 'pdf') { download(name, window.VReporte.pdf(rep), 'application/pdf'); toast('Reporte en PDF descargado'); }
+      else { download(name, window.VReporte.csv(rep), 'text/csv;charset=utf-8'); toast('Reporte en CSV descargado'); }
       successPop();
     } catch (e) { toast('No se pudo generar el reporte', 'error'); }
   }
@@ -1917,7 +2272,7 @@
         <div class="grid-2">
           <div class="field"><label for="asNum">N.º parqueadero</label><div class="input-wrap"><input id="asNum" type="text" value="${escapeHtml(g('numeroParqueadero', ''))}" placeholder="P-V04" autocomplete="off"/></div></div>
           <div class="field"><label for="asTorre">Zona / Torre</label><div class="input-wrap"><input id="asTorre" type="text" value="${escapeHtml(g('torre', ''))}" placeholder="Visitantes" autocomplete="off"/></div></div>
-          <div class="field"><label for="asPort">Puerto</label><div class="input-wrap select-wrap"><select id="asPort">${['Tipo 1', 'Tipo 2', 'CCS', 'Doméstico'].map((v) => opt(v, g('puerto', 'Tipo 2'))).join('')}</select></div></div>
+          <div class="field"><span class="field-label">Puerto</span><div class="pgrid pgrid--pick" id="asPort" role="group" aria-label="Tipo de puerto"></div></div>
           <div class="field"><label for="asPow">Potencia (kW)</label><div class="input-wrap select-wrap"><select id="asPow">${['3.6', '7.4', '11', '22'].map((v) => `<option ${(+v === +g('pow', 7.4)) ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
           <div class="field"><label for="asSize">Tamaño</label><div class="input-wrap select-wrap"><select id="asSize">${['Pequeño', 'Mediano', 'Grande'].map((v) => opt(v, g('tamano', 'Mediano'))).join('')}</select></div></div>
           <div class="field"><label for="asPrecio">Precio por kWh</label><div class="input-wrap"><span class="unit unit--left">$</span><input id="asPrecio" inputmode="numeric" class="has-left" value="${escapeHtml(String(g('precio', 900)))}" autocomplete="off"/></div></div>
@@ -1934,7 +2289,7 @@
           <label>Código QR de pago <span class="opt">(opcional)</span></label>
           <input id="asQrInput" type="file" accept="image/*" class="hidden"/>
           <div class="qr-preview hidden" id="asQrPreview"><img id="asQrImg" alt="QR"/><button type="button" class="qr-remove" id="asQrRemove">✕ Quitar QR</button></div>
-          <button type="button" class="qr-drop" id="asQrPick"><span class="qr-ico">📷</span><span class="qr-drop-main">Subir imagen del QR</span><small>La comprimimos por ti.</small></button>
+          <button type="button" class="qr-drop" id="asQrPick"><span class="qr-ico"><svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg></span><span class="qr-drop-main">Subir imagen del QR</span><small>La comprimimos por ti.</small></button>
         </div>
         <div class="field ta-field"><label for="asCond">Indicaciones</label><div class="input-wrap"><textarea id="asCond" rows="2" placeholder="Ej: Avisa en portería al llegar.">${escapeHtml(g('condiciones', ''))}</textarea></div></div>
         <div class="switch-row"><div><span class="switch-title">Visible para los vecinos</span><span class="switch-sub">Aparece en la búsqueda</span></div><button id="asVisible" class="switch ${g('visible', true) !== false ? 'is-on' : ''}" type="button" role="switch" aria-checked="${g('visible', true) !== false}"><i></i></button></div>
@@ -1942,9 +2297,13 @@
         <button class="btn-ghost btn-block" type="button" data-close="admSpot" style="margin-top:8px">Cancelar</button>
       </div>`;
     openSheet('#admSpotSheet');
+    // La hoja se rearma cada vez que se abre, así que la rejilla se pinta y se
+    // cablea aquí, no en init().
+    pintarSelectorPuerto('#asPort', g('puerto', 'Tipo 2'));
+    armarSelectorPuerto('#asPort');
     qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), g('qr', null));
     $('#asQrPick').addEventListener('click', () => $('#asQrInput').click());
-    $('#asQrInput').addEventListener('change', async () => { const f = $('#asQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), url); toast('QR cargado 📷'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#asQrInput').value = ''; });
+    $('#asQrInput').addEventListener('change', async () => { const f = $('#asQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), url); toast('QR cargado'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#asQrInput').value = ''; });
     $('#asQrRemove').addEventListener('click', () => { spotQr = ''; qrShow($('#asQrPreview'), $('#asQrImg'), $('#asQrPick'), null); });
     $('#asVisible').addEventListener('click', () => { const sw = $('#asVisible'); sw.classList.toggle('is-on'); sw.setAttribute('aria-checked', String(sw.classList.contains('is-on'))); });
     $('#asSave').addEventListener('click', saveAdminSpot);
@@ -1955,7 +2314,7 @@
     if (!nombre) { toast('Ponle un nombre al puesto', 'error'); return; }
     const data = {
       nombre, numeroParqueadero: $('#asNum').value.trim(), torre: $('#asTorre').value.trim() || 'Visitantes',
-      puerto: $('#asPort').value, pow: parseFloat($('#asPow').value) || 7.4, tamano: $('#asSize').value,
+      puerto: valorSelectorPuerto('#asPort'), pow: parseFloat($('#asPow').value) || 7.4, tamano: $('#asSize').value,
       precio: Math.max(0, Math.round(parseNum($('#asPrecio').value))) || 900, serviceFee: 0, discount: 0,
       dias: [1, 1, 1, 1, 1, 1, 1], desde: $('#asDesde').value || '06:00', hasta: $('#asHasta').value || '22:00',
       breb: $('#asBreb').value.trim(), titular: $('#asTitular').value.trim() || 'Admón. MontReal',
@@ -1964,7 +2323,7 @@
     };
     if (spotQr !== null) data.qr = spotQr;
     if (!user || devAdmin()) { toast(devAdmin() ? 'Modo prueba: no se guarda en la nube' : 'Inicia sesión como administrador', 'error'); if (devAdmin()) closeSheet('#admSpotSheet'); return; }
-    try { $('#asSave').disabled = true; await VB.saveManagedSpot(data, adminSpotCtx); closeSheet('#admSpotSheet'); successPop(); toast('Puesto guardado ✅'); }
+    try { $('#asSave').disabled = true; await VB.saveManagedSpot(data, adminSpotCtx); closeSheet('#admSpotSheet'); successPop(); toast('Puesto guardado'); }
     catch (e) { toast('No se pudo guardar: ' + (e.message || ''), 'error'); }
     finally { const b = $('#asSave'); if (b) b.disabled = false; }
   }
@@ -1990,12 +2349,12 @@
     $('#admUserCount').textContent = list.length + (list.length === 1 ? ' residente' : ' residentes');
     const ul = $('#admUsersList'), esc = vaEscalonada(ul); ul.innerHTML = '';
     $('#admUsersEmpty').classList.toggle('hidden', list.length > 0);
-    if (!list.length) { $('#admUsersEmpty').innerHTML = '<div class="empty-icon">👥</div><p>' + (term ? 'Sin resultados.' : 'Aún no hay residentes registrados.') + '</p>'; }
+    if (!list.length) { $('#admUsersEmpty').innerHTML = '<div class="empty-icon"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg></div><p>' + (term ? 'Sin resultados.' : 'Aún no hay residentes registrados.') + '</p>'; }
     list.forEach((u, i) => {
       const li = document.createElement('li'); li.className = 'user-row'; escalonar(li, i, esc);
       const initials = String(u.name || u.email || 'U').trim().charAt(0).toUpperCase();
       const loc = [u.torre && u.torre !== '—' ? 'Torre ' + u.torre : null, u.apto && u.apto !== '—' ? 'Apto ' + u.apto : null].filter(Boolean).join(' · ') || 'Sin ubicación';
-      li.innerHTML = `<span class="user-av">${escapeHtml(initials)}</span><div class="user-main"><div class="user-name">${escapeHtml(u.name || 'Sin nombre')}${u.role === 'admin' ? ' <span class="sc-badge b-ver">Admin</span>' : ''}</div><div class="user-sub">${escapeHtml(u.email || '')}</div><div class="user-loc">🏢 ${escapeHtml(loc)}${u.phone ? ' · 📱 ' + escapeHtml(u.phone) : ''}</div></div><button class="btn-ghost btn-sm user-manage" data-uid="${escapeHtml(u.uid)}">Gestionar</button>`;
+      li.innerHTML = `<span class="user-av">${escapeHtml(initials)}</span><div class="user-main"><div class="user-name">${escapeHtml(u.name || 'Sin nombre')}${u.role === 'admin' ? ' <span class="sc-badge b-ver">Admin</span>' : ''}</div><div class="user-sub">${escapeHtml(u.email || '')}</div><div class="user-loc"><svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> ${escapeHtml(loc)}${u.phone ? ' · <svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg> ' + escapeHtml(u.phone) : ''}</div></div><button class="btn-ghost btn-sm user-manage" data-uid="${escapeHtml(u.uid)}">Gestionar</button>`;
       ul.appendChild(li);
     });
     $$('#admUsersList .user-manage').forEach((b) => b.addEventListener('click', () => openUserSheet(b.dataset.uid)));
@@ -2009,10 +2368,10 @@
       <div class="login-box" style="text-align:left">
         <div class="user-detail-head"><span class="user-av user-av--big">${escapeHtml(String(u.name || u.email || 'U').charAt(0).toUpperCase())}</span><div><div class="bk-name">${escapeHtml(u.name || 'Sin nombre')}</div><div class="bk-sub">${escapeHtml(u.email || '')}</div></div></div>
         <div class="user-detail-grid">
-          <div class="udg"><span>📱 Celular</span><b>${escapeHtml(u.phone || '—')}</b></div>
-          <div class="udg"><span>🏢 Ubicación</span><b>${escapeHtml(loc)}</b></div>
-          <div class="udg"><span>✉️ Correo</span><b>${u.emailVerified ? 'Verificado' : 'Sin verificar'}</b></div>
-          <div class="udg"><span>🔑 Rol actual</span><b>${u.role === 'admin' ? 'Administrador' : 'Residente'}</b></div>
+          <div class="udg"><span><svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg> Celular</span><b>${escapeHtml(u.phone || '—')}</b></div>
+          <div class="udg"><span><svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> Ubicación</span><b>${escapeHtml(loc)}</b></div>
+          <div class="udg"><span>Correo</span><b>${u.emailVerified ? 'Verificado' : 'Sin verificar'}</b></div>
+          <div class="udg"><span><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg> Rol actual</span><b>${u.role === 'admin' ? 'Administrador' : 'Residente'}</b></div>
         </div>
         <h3 class="sub-h" style="margin-top:16px">Acceso al conjunto</h3>
         <div class="switch-row" style="margin-top:0">
@@ -2022,7 +2381,7 @@
         <p class="hint">Actívalo a mano si el vecino es de MontReal pero no tiene el código a la mano.</p>
         <h3 class="sub-h" style="margin-top:16px">Rol en el conjunto</h3>
         <div class="segmented" id="urRole">
-          <button class="seg-btn ${u.role !== 'admin' ? 'is-active' : ''}" data-role="guest" type="button">🏠 Residente</button>
+          <button class="seg-btn ${u.role !== 'admin' ? 'is-active' : ''}" data-role="guest" type="button"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg> Residente</button>
           <button class="seg-btn ${u.role === 'admin' ? 'is-active' : ''}" data-role="admin" type="button">✦ Administrador</button>
         </div>
         <p class="hint">Un administrador accede al panel del conjunto, las métricas y la gestión de usuarios.</p>
@@ -2045,7 +2404,7 @@
     if (role === (u.role === 'admin' ? 'admin' : 'guest')) { closeSheet('#userSheet'); return; }
     if (u.uid === (VB && VB.uid()) && role !== 'admin' && !confirm('Vas a quitarte a ti mismo el rol de administrador. ¿Continuar?')) return;
     if (devAdmin() || !user || String(u.uid).startsWith('u-')) { toast('Modo prueba: cambio de rol simulado'); closeSheet('#userSheet'); return; }
-    VB.setUserRole(u.uid, role).then(() => { closeSheet('#userSheet'); successPop(); toast('Rol actualizado ✅'); })
+    VB.setUserRole(u.uid, role).then(() => { closeSheet('#userSheet'); successPop(); toast('Rol actualizado'); })
       .catch(() => toast('No se pudo cambiar el rol', 'error'));
   }
 
@@ -2060,7 +2419,7 @@
   async function saveProfileHandler() {
     if (!user) { needLogin(); return; }
     const patch = { phone: $('#pfPhone').value.trim(), torre: $('#pfTorre').value.trim(), apto: $('#pfApto').value.trim() };
-    try { $('#pfSave').disabled = true; await VB.saveProfile(patch); successPop(); toast('Información guardada ✅'); }
+    try { $('#pfSave').disabled = true; await VB.saveProfile(patch); successPop(); toast('Información guardada'); }
     catch (e) { toast('No se pudo guardar', 'error'); }
     finally { $('#pfSave').disabled = false; }
   }
@@ -2202,12 +2561,12 @@
   function mostrarAviso(tipo, titulo, detalle) {
     const el = document.createElement('div');
     el.className = 'aviso-centro aviso-' + tipo;
-    const ico = tipo === 'ok' ? '✓' : tipo === 'espera' ? '📨' : '!';
+    const ico = tipo === 'ok' ? '✓' : tipo === 'espera' ? '' : '!';
     el.innerHTML = `<div class="aviso-caja">
         <span class="aviso-ico">${ico}</span>
         <b>${escapeHtml(titulo)}</b>
         <p>${detalle || ''}</p>
-        ${tipo === 'espera' ? '<span class="aviso-pill">⏳ Esperando confirmación</span>' : ''}
+        ${tipo === 'espera' ? '<span class="aviso-pill"><svg class="ico" aria-hidden="true"><use href="#i-hourglass"/></svg> Esperando confirmación</span>' : ''}
       </div>`;
     document.body.appendChild(el);
     if (navigator.vibrate) { try { navigator.vibrate([18, 28, 40]); } catch (e) {} }
@@ -2274,7 +2633,7 @@
     if (hp) $$('#aptoChips .chip').forEach((c) => { const u = +c.dataset.v; c.textContent = taState.piso * 100 + u; c.classList.toggle('is-active', taState.unit === u); });
     const apto = hp && taState.unit ? taState.piso * 100 + taState.unit : null;
     const parts = []; if (taState.torre) parts.push('Torre ' + taState.torre); if (apto) parts.push('Apto ' + apto);
-    $('#taSummary').classList.toggle('hidden', !parts.length); if (parts.length) $('#taSummaryText').textContent = '🏢 ' + parts.join(' · ');
+    $('#taSummary').classList.toggle('hidden', !parts.length); if (parts.length) $('#taSummaryText').textContent = '<svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> ' + parts.join(' · ');
   }
   const getTA = () => ({ torre: taState.torre || null, apto: taState.piso && taState.unit ? taState.piso * 100 + taState.unit : null });
   function readInputs() {
@@ -2433,7 +2792,7 @@
     }
     if (ok) {
       persistSessions();
-      toast(ok === 1 ? 'Carga sincronizada con el conjunto ☁️' : ok + ' cargas sincronizadas con el conjunto ☁️');
+      toast(ok === 1 ? 'Carga sincronizada con el conjunto <svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>' : ok + ' cargas sincronizadas con el conjunto <svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>');
       if (currentView === 'analisis') renderHistory();
     }
   }
@@ -2454,7 +2813,7 @@
   async function toggleSessionPaid(localId) {
     const s = sessions.find((x) => x.id === localId); if (!s) return;
     s.pagado = !s.pagado; persistSessions(); renderHistory();
-    toast(s.pagado ? 'Pago registrado 💵' : 'Pago marcado como pendiente');
+    toast(s.pagado ? 'Pago registrado <svg class="ico" aria-hidden="true"><use href="#i-money"/></svg>' : 'Pago marcado como pendiente');
     if (s.remoteId && VB && user) {
       try { await VB.updateChargeSession(s.remoteId, { pagado: !!s.pagado }); }
       catch (e) { toast('Se guardó en el dispositivo, pero no en la nube', 'error'); }
@@ -2469,13 +2828,13 @@
     const porCobrar = sessions.filter((s) => !s.pagado).reduce((a, s) => a + (s.total || 0), 0);
     if (pend) {
       pend.classList.toggle('hidden', porCobrar <= 0);
-      if (porCobrar > 0) pend.innerHTML = '💵 Por cobrar: <b>' + fmtCOP(porCobrar) + '</b> · marca el pago cuando te llegue la transferencia.';
+      if (porCobrar > 0) pend.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Por cobrar: <b>' + fmtCOP(porCobrar) + '</b> · marca el pago cuando te llegue la transferencia.';
     }
     if (!sessions.length) { empty.classList.remove('hidden'); return; } empty.classList.add('hidden');
     sessions.forEach((s) => {
       const li = document.createElement('li'); li.className = 'hist-item'; const d = new Date(s.dateISO);
-      const sub = [d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }), d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }), taLabel(s) || (s.driverName ? s.carModel : ''), s.remoteId ? '☁️' : ''].filter(Boolean).join(' · ');
-      li.innerHTML = `<div class="hist-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div><div class="hist-main"><div class="hist-title">${escapeHtml(s.driverName || s.carModel || 'Carga')}${s.pagado ? ' <span class="sc-badge b-ok">💵 Pagada</span>' : ''}</div><div class="hist-sub">${escapeHtml(sub)}</div></div><div class="hist-amount"><div class="hist-cop">${fmtCOP(s.total)}</div><div class="hist-kwh">${fmtKwh(s.kwh)} kWh</div></div><div class="hist-actions"><button class="btn-ghost btn-sm" data-pay="${s.id}">${s.pagado ? 'Sin pagar' : '💵 Pago recibido'}</button><button class="btn-ghost btn-sm" data-share="${s.id}">Compartir</button><button class="btn-ghost btn-sm btn-danger" data-del="${s.id}">Eliminar</button></div>`;
+      const sub = [d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }), d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }), taLabel(s) || (s.driverName ? s.carModel : ''), s.remoteId ? '<svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>' : ''].filter(Boolean).join(' · ');
+      li.innerHTML = `<div class="hist-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div><div class="hist-main"><div class="hist-title">${escapeHtml(s.driverName || s.carModel || 'Carga')}${s.pagado ? ' <span class="sc-badge b-ok"><svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pagada</span>' : ''}</div><div class="hist-sub">${escapeHtml(sub)}</div></div><div class="hist-amount"><div class="hist-cop">${fmtCOP(s.total)}</div><div class="hist-kwh">${fmtKwh(s.kwh)} kWh</div></div><div class="hist-actions"><button class="btn-ghost btn-sm" data-pay="${s.id}">${s.pagado ? 'Sin pagar' : '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pago recibido'}</button><button class="btn-ghost btn-sm" data-share="${s.id}">Compartir</button><button class="btn-ghost btn-sm btn-danger" data-del="${s.id}">Eliminar</button></div>`;
       list.appendChild(li);
     });
     $$('#histList [data-del]').forEach((b) => b.addEventListener('click', () => deleteSession(b.dataset.del)));
@@ -2489,20 +2848,20 @@
     toast('Carga eliminada');
   }
   function receiptText(c) {
-    const L = ['⚡ *Voltio* — Recibo de carga'];
-    if (settings.stationName) L.push('📍 ' + settings.stationName);
-    L.push('🗓️ ' + new Date(c.dateISO || Date.now()).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }));
-    if (c.driverName) L.push('👤 ' + c.driverName);
-    if (c.torre || c.apto) L.push('🏢 ' + [c.torre ? 'Torre ' + c.torre : null, c.apto ? 'Apto ' + c.apto : null].filter(Boolean).join(' · '));
-    if (c.carModel) L.push('🚗 ' + c.carModel);
+    const L = ['<svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg> *Voltio* — Recibo de carga'];
+    if (settings.stationName) L.push('' + settings.stationName);
+    L.push('<svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg> ' + new Date(c.dateISO || Date.now()).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }));
+    if (c.driverName) L.push('<svg class="ico" aria-hidden="true"><use href="#i-user"/></svg> ' + c.driverName);
+    if (c.torre || c.apto) L.push('<svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> ' + [c.torre ? 'Torre ' + c.torre : null, c.apto ? 'Apto ' + c.apto : null].filter(Boolean).join(' · '));
+    if (c.carModel) L.push('<svg class="ico" aria-hidden="true"><use href="#i-car"/></svg> ' + c.carModel);
     L.push('──────────────');
     if (c.readingStart != null && (c.readingStart || c.readingEnd)) { L.push('Lectura inicial: ' + fmtKwh(c.readingStart) + ' kWh'); L.push('Lectura final:  ' + fmtKwh(c.readingEnd) + ' kWh'); }
     L.push('Consumo: ' + fmtKwh(c.kwh) + ' kWh'); L.push('Precio kWh: ' + fmtCOP(c.pricePerKwh));
     if (c.serviceFee > 0) L.push('Tarifa servicio: ' + fmtCOP(c.serviceFee)); if (c.discount > 0) L.push('Descuento: −' + fmtCOP(c.discount));
     L.push('──────────────'); L.push('*TOTAL: ' + fmtCOP(c.total) + '*');
-    L.push('🔋 ~' + fmtNum(Math.round(c.kmAdded)) + ' km · 🌱 ' + (c.co2).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' kg CO₂ evitados');
+    L.push('<svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg> ~' + fmtNum(Math.round(c.kmAdded)) + ' km · <svg class="ico" aria-hidden="true"><use href="#i-leaf"/></svg> ' + (c.co2).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' kg CO₂ evitados');
     if (settings.ownerName) L.push('Cargador de ' + settings.ownerName);
-    L.push('Gracias por cargar con energía limpia ⚡'); return L.join('\n');
+    L.push('Gracias por cargar con energía limpia <svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg>'); return L.join('\n');
   }
   /* Compartir el recibo: por defecto como imagen, que es lo que la gente espera
      recibir por WhatsApp. El texto plano sigue disponible para quien lo prefiera. */
@@ -2522,7 +2881,7 @@
     btn.textContent = shareFmt === 'pdf' ? 'Armando el PDF…' : 'Armando la imagen…';
     try {
       const r = await window.VRecibo.compartir(c, shareFmt, { texto: t, stationName: c.stationName || settings.stationName });
-      if (r === 'descargado') toast(shareFmt === 'pdf' ? 'PDF guardado en tus descargas 📄' : 'Imagen guardada en tus descargas 🖼️');
+      if (r === 'descargado') toast(shareFmt === 'pdf' ? 'PDF guardado en tus descargas <svg class="ico" aria-hidden="true"><use href="#i-doc"/></svg>' : 'Imagen guardada en tus descargas <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>');
     } catch (e) {
       toast('No pudimos armar el recibo. Te lo compartimos como texto.', 'error');
       if (navigator.share) { try { await navigator.share({ title: 'Recibo Voltio', text: t }); } catch (e2) {} }
@@ -2538,7 +2897,7 @@
     if (!sessions.length) { toast('No hay cargas para exportar', 'error'); return; }
     const head = ['Fecha', 'Vecino', 'Vehiculo', 'Torre', 'Apto', 'Consumo (kWh)', 'Precio kWh', 'Total (COP)', 'Pago'];
     const rows = sessions.map((s) => [new Date(s.dateISO).toLocaleString('es-CO'), s.driverName || '', s.carModel || '', s.torre || '', s.apto || '', round2(s.kwh), Math.round(s.pricePerKwh), Math.round(s.total), s.pagado ? 'Pagado' : 'Pendiente']);
-    download('voltio-recibos.csv', '﻿' + [head].concat(rows).map((r) => r.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8'); toast('Recibos exportados ⬇');
+    download('voltio-recibos.csv', '﻿' + [head].concat(rows).map((r) => r.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8'); toast('Recibos exportados');
   }
   // ---- Gráficas ----
   const dayKey = (d) => ymd(d);
@@ -2690,7 +3049,7 @@
   function setupInstall() {
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('#installBtn').classList.remove('hidden'); });
     $('#installBtn').addEventListener('click', async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); try { await deferredPrompt.userChoice; } catch (e) {} deferredPrompt = null; $('#installBtn').classList.add('hidden'); });
-    window.addEventListener('appinstalled', () => { $('#installBtn').classList.add('hidden'); toast('¡App instalada! ⚡'); });
+    window.addEventListener('appinstalled', () => { $('#installBtn').classList.add('hidden'); toast('¡App instalada!'); });
   }
 
   /* =========================================================
@@ -2737,6 +3096,9 @@
 
   function init() {
     registerSW(); setupInstall(); fillConjuntoSelects(); buildTAChips(); renderTA(); buildAvDias(); loadSettingsUI();
+    pintarFiltroPuertos();
+    pintarSelectorPuerto('#spPort', 'Tipo 2');
+    armarSelectorPuerto('#spPort');
     buildHeroCar();
     // Los puestos de ejemplo solo tienen sentido mientras se desarrolla:
     // en el conjunto real nadie debe ver cargadores que no existen.
@@ -2762,8 +3124,8 @@
 
     // Rol / modo (el admin se resuelve cuando llega su perfil de Firestore)
     refreshMode({ keepView: true });
-    $('#roleDriverBtn').addEventListener('click', () => { applyRole('driver'); toast('Modo conductor 🚗'); });
-    $('#roleHostBtn').addEventListener('click', () => { applyRole('host'); toast('Modo anfitrión 🏠'); });
+    $('#roleDriverBtn').addEventListener('click', () => { applyRole('driver'); toast('Modo conductor'); });
+    $('#roleHostBtn').addEventListener('click', () => { applyRole('host'); toast('Modo anfitrión'); });
     $$('#roleSwitch .seg-btn').forEach((b) => b.addEventListener('click', () => { if (settings.role !== b.dataset.role) { applyRole(b.dataset.role, { keepView: true }); } }));
 
     $$('.nav-btn').forEach((b) => b.addEventListener('click', () => goView(b.dataset.view)));
@@ -2771,12 +3133,12 @@
     // Login
     $$('.js-open-login').forEach((b) => b.addEventListener('click', () => openSheet('#loginSheet')));
     $('#topAuthBtn').addEventListener('click', () => { if (user) goView('settings'); else openSheet('#loginSheet'); });
-    $('#lgGoogle').addEventListener('click', async () => { $('#lgError').classList.add('hidden'); try { await VB.loginGoogle(); toast('¡Bienvenido! ⚡'); } catch (e) { $('#lgError').textContent = e.message; $('#lgError').classList.remove('hidden'); } });
+    $('#lgGoogle').addEventListener('click', async () => { $('#lgError').classList.add('hidden'); try { await VB.loginGoogle(); toast('¡Bienvenido!'); } catch (e) { $('#lgError').textContent = e.message; $('#lgError').classList.remove('hidden'); } });
     $('#lgToggle').addEventListener('click', () => { lgMode = lgMode === 'login' ? 'signup' : 'login'; $('#lgNameField').classList.toggle('hidden', lgMode !== 'signup'); $('#lgSubmit').textContent = lgMode === 'signup' ? 'Crear cuenta' : 'Entrar'; $('#lgToggle').innerHTML = lgMode === 'signup' ? '¿Ya tienes cuenta? <b>Entrar</b>' : '¿No tienes cuenta? <b>Crear una</b>'; });
     $('#lgSubmit').addEventListener('click', async () => {
       const email = $('#lgEmail').value.trim(), pass = $('#lgPass').value; $('#lgError').classList.add('hidden');
       if (!email || !pass) { $('#lgError').textContent = 'Escribe tu correo y contraseña.'; $('#lgError').classList.remove('hidden'); return; }
-      try { if (lgMode === 'signup') await VB.signupEmail($('#lgName').value.trim(), email, pass); else await VB.loginEmail(email, pass); toast('¡Bienvenido! ⚡'); }
+      try { if (lgMode === 'signup') await VB.signupEmail($('#lgName').value.trim(), email, pass); else await VB.loginEmail(email, pass); toast('¡Bienvenido!'); }
       catch (e) { $('#lgError').textContent = e.message; $('#lgError').classList.remove('hidden'); }
     });
     $('#lgPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#lgSubmit').click(); });
@@ -2786,17 +3148,45 @@
     $$('[data-close]').forEach((el) => el.addEventListener('click', () => closeSheet('#' + el.getAttribute('data-close') + 'Sheet')));
 
     // Filtros de búsqueda
-    const filterGroup = (sel, key, cast) => $$(sel + ' .chip').forEach((c) => c.addEventListener('click', () => { filters[key] = cast ? cast(c.dataset[Object.keys(c.dataset)[0]]) : c.dataset[Object.keys(c.dataset)[0]]; $$(sel + ' .chip').forEach((x) => x.classList.toggle('is-active', x === c)); if (key === 'day') { const pick = c.dataset.day === 'pick'; $('#fDate').classList.toggle('hidden', !pick); if (pick && !$('#fDate').value) $('#fDate').value = ymd(new Date()); filters.date = pick ? $('#fDate').value : null; } updateBandNote(); runSearch(); }));
-    filterGroup('#fPort', 'port');
+    const filterGroup = (sel, key, cast) => $$(sel + ' .chip').forEach((c) => c.addEventListener('click', () => { filters[key] = cast ? cast(c.dataset[Object.keys(c.dataset)[0]]) : c.dataset[Object.keys(c.dataset)[0]]; $$(sel + ' .chip').forEach((x) => x.classList.toggle('is-active', x === c)); runSearch(); }));
+    // El puerto ya no es una fila de chips sino la rejilla de conectores, y se
+    // repinta con cada cambio de puestos porque lleva el contador de cada tipo.
+    $('#fPort').addEventListener('click', (e) => {
+      const b = e.target.closest('.pcell'); if (!b) return;
+      filters.port = b.dataset.port;
+      pintarFiltroPuertos();
+      runSearch();
+    });
     filterGroup('#fPow', 'minPow', Number);
     filterGroup('#fSize', 'size');
-    filterGroup('#fDay', 'day');
-    filterGroup('#fBand', 'band');
-    $('#fDate').addEventListener('change', () => { filters.date = $('#fDate').value; runSearch(); });
+
+    // Día: la tira de catorce fechas.
+    $('#fDays').addEventListener('click', (e) => {
+      const b = e.target.closest('.dcell'); if (!b) return;
+      filters.fecha = b.dataset.fecha;
+      ribPend = null;
+      pintarTira(); pintarCinta(); runSearch();
+    });
+    // Hora: primer toque fija el inicio, segundo el fin. Si el segundo es
+    // anterior, se invierte solo — nadie tiene que acordarse del orden.
+    $('#fRib').addEventListener('click', (e) => {
+      const c = e.target.closest('.rb-cell'); if (!c || c.classList.contains('closed')) return;
+      elegirFranja(+c.dataset.h);
+    });
+    $$('#fPresets .chip').forEach((b) => b.addEventListener('click', () => {
+      const [a, z] = b.dataset.pre.split(',').map(Number);
+      filters.from = hhmm(a); filters.to = hhmm(z); ribPend = null;
+      $$('#fPresets .chip').forEach((x) => x.classList.toggle('is-active', x === b));
+      pintarCinta(); runSearch();
+    }));
+
     $('#fReset').addEventListener('click', () => {
-      Object.assign(filters, { port: 'todos', minPow: 0, size: 'todos', day: 'any', date: null, band: 'any' });
-      [['#fPort', 'todos'], ['#fPow', '0'], ['#fSize', 'todos'], ['#fDay', 'any'], ['#fBand', 'any']].forEach(([s, v]) => $$(s + ' .chip').forEach((c) => c.classList.toggle('is-active', Object.values(c.dataset)[0] === v)));
-      $('#fDate').classList.add('hidden'); updateBandNote(); runSearch(); toast('Filtros reiniciados');
+      Object.assign(filters, { port: 'todos', minPow: 0, size: 'todos', fecha: ymd(new Date()), from: '18:00', to: '21:00' });
+      ribPend = null;
+      [['#fPow', '0'], ['#fSize', 'todos']].forEach(([s, v]) => $$(s + ' .chip').forEach((c) => c.classList.toggle('is-active', Object.values(c.dataset)[0] === v)));
+      $$('#fPresets .chip').forEach((x) => x.classList.remove('is-active'));
+      pintarFiltroPuertos(); pintarTira(); pintarCinta(); runSearch();
+      toast('Filtros reiniciados');
     });
 
     // Calendario nav
@@ -2836,7 +3226,7 @@
 
     // QR de pago (formulario del anfitrión)
     $('#spQrPick').addEventListener('click', () => $('#spQrInput').click());
-    $('#spQrInput').addEventListener('change', async () => { const f = $('#spQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), url); toast('QR cargado 📷'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#spQrInput').value = ''; });
+    $('#spQrInput').addEventListener('change', async () => { const f = $('#spQrInput').files[0]; if (!f) return; try { const url = await compressImageFile(f, 520, 0.72); spotQr = url; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), url); toast('QR cargado'); } catch (e) { toast('No se pudo procesar la imagen', 'error'); } $('#spQrInput').value = ''; });
     $('#spQrRemove').addEventListener('click', () => { spotQr = ''; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), null); });
 
     // Potencia del cargador: "Otra…" abre el campo libre
@@ -2865,7 +3255,7 @@
       const target = b.dataset.cam;
       window.VOCR.open({
         label: target === 'readingStart' ? 'de antes de conectar' : 'de después de cargar',
-        onUse: (v) => { $('#' + target).value = v; updateLive(); toast('Lectura registrada 📷'); }
+        onUse: (v) => { $('#' + target).value = v; updateLive(); toast('Lectura registrada'); }
       });
     }));
 
@@ -2924,11 +3314,11 @@
     $('#setServiceFee').addEventListener('input', () => { settings.serviceFee = Math.max(0, parseNum($('#setServiceFee').value)); persistSettings(); });
     $('#setEff').addEventListener('input', () => { settings.kmPerKwh = Math.max(0, parseNum($('#setEff').value)) || 6; persistSettings(); });
     $$('#accentRow .accent-dot').forEach((d) => d.addEventListener('click', () => { applyAccent(d.dataset.accent); persistSettings(); }));
-    $$('#vehRow .veh-btn').forEach((b) => b.addEventListener('click', () => { applyVehicle(b.dataset.veh); persistSettings(); syncHeroCar(); toast('Vehículo actualizado 🚙'); }));
+    $$('#vehRow .veh-btn').forEach((b) => b.addEventListener('click', () => { applyVehicle(b.dataset.veh); persistSettings(); syncHeroCar(); toast('Vehículo actualizado'); }));
     $('#setAnim').addEventListener('click', () => { settings.animations = !settings.animations; const sw = $('#setAnim'); sw.classList.toggle('is-on', settings.animations); sw.setAttribute('aria-checked', String(settings.animations)); persistSettings(); });
     $('#resetBtn').addEventListener('click', () => { if (confirm('¿Restablecer datos locales (ajustes y recibos)?')) { [LS_SETTINGS, LS_SESSIONS].forEach((k) => localStorage.removeItem(k)); settings = Object.assign({}, DEFAULTS); sessions = []; loadSettingsUI(); renderHistory(); resetForm(); $('#roleGate').classList.remove('hidden'); toast('Datos locales restablecidos'); } });
 
-    updateBandNote(); updateLive();
+    pintarTira(); pintarCinta(); updateLive();
 
     /* Decidir el modo de entrada AQUÍ, sin esperar a que conteste la nube: si el
        vecino ya eligió rol entra directo a su pestaña, y si no, ve el selector.
@@ -2943,10 +3333,6 @@
     setTimeout(() => {
       if (!$('.view.is-active') && $('#roleGate').classList.contains('hidden')) refreshMode();
     }, 1500);
-  }
-  function updateBandNote() {
-    const notes = { any: '', m: 'Franja de la mañana: 6:00 a 12:00', t: 'Franja de la tarde: 12:00 a 18:00', n: 'Franja de la noche: 18:00 a 24:00' };
-    $('#bandNote').textContent = notes[filters.band] || '';
   }
   // exponer para renderAuthUI (edición de puesto)
   window.__spotEditing = false;

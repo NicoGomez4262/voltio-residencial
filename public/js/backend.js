@@ -222,6 +222,20 @@ const VB = {
       return snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
     } catch (e) { return []; }
   },
+  /* Todas las horas apartadas del conjunto en una fecha, de un solo viaje.
+     Los documentos de slots ya guardaban `fecha`, así que esto es una consulta
+     de campo único —Firestore la indexa sola, sin índice compuesto— y las
+     reglas ya permiten `list` a cualquiera que haya iniciado sesión. Con esto
+     la búsqueda puede decir cuántos puestos quedan libres a cada hora, en vez
+     de mirar solo el horario que el anfitrión declaró. */
+  async busyDay(fecha) {
+    if (!fecha) return [];
+    try {
+      const q = query(collection(db, 'slots'), where('fecha', '==', fecha));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data());
+    } catch (e) { return []; }
+  },
 
   /* ---------- Reservas ---------- */
   async createBooking(bk) {

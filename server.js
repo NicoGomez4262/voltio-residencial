@@ -71,8 +71,10 @@ const server = http.createServer((req, res) => {
         const ext = path.extname(filePath).toLowerCase();
         const type = MIME[ext] || 'application/octet-stream';
         const headers = { 'Content-Type': type };
-        // El service worker y el HTML no deben cachearse en dev
-        if (/sw\.js$|index\.html$|manifest\.webmanifest$/.test(filePath)) {
+        // En desarrollo nada se cachea. Las URLs llevan ?v=<versión>, así que
+        // el navegador se queda con el JS viejo bajo la misma URL hasta que uno
+        // sube la versión — cómodo en producción, insufrible mientras se edita.
+        if (/\.(js|mjs|css|html|webmanifest)$/.test(filePath)) {
           headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
         }
         send(res, 200, data, headers);

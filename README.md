@@ -5,7 +5,7 @@
 Un residente con cargador publica su parqueadero; sus vecinos lo reservan, cargan y le
 pagan. La administración ve el consumo del conjunto y descarga el reporte mensual.
 
-**Producción:** [voltio-red.web.app](https://voltio-red.web.app) · **v2.9.0** ·
+**Producción:** [voltio-red.web.app](https://voltio-red.web.app) · **v2.10.0** ·
 piloto activo en el conjunto MontReal (3 torres · 96 apartamentos)
 
 [![PWA](https://img.shields.io/badge/PWA-instalable-3ad4e6)](https://voltio-red.web.app)
@@ -45,8 +45,11 @@ entre vecinos y no hace falta que nadie se desplace.
 
 ### 🚗 Residente que carga
 
-- Busca puestos con filtros de puerto, potencia, tamaño, día y franja horaria
-- Ve las **horas ya apartadas** antes de elegir
+- Busca puestos eligiendo el **conector dibujado**, la potencia, el tamaño, y
+  una **fecha y franja reales** —no "hoy" ni "cualquier día"—
+- La cinta de horas muestra **cuántos puestos quedan libres a cada hora**, ya
+  descontando las reservas hechas
+- Ve las **horas ya apartadas** antes de elegir, y no puede tocarlas
 - **Estimado de cobro** calculado a partir de la duración y la potencia del cargador, o
   puesto a mano si prefiere
 - Reserva, sigue su estado y cancela liberando la hora
