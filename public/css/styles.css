@@ -25,15 +25,27 @@ svg { display: block; }
 .hidden { display: none !important; }
 
 /* ---------- Iconos ----------
-   Un solo tamaño base y un solo grosor. Se alinean con la línea de texto que
-   acompañan, no con la caja: por eso el desplazamiento de 0.14em, que es lo que
-   hace que un icono al lado de una palabra no parezca flotar. */
+   `display: inline-block` es obligatorio: el reset de arriba pone
+   `svg { display: block }`, y un bloque dentro de una línea de texto se lleva
+   el renglón entero — el icono terminaba ENCIMA de la palabra que acompaña, y
+   la caja crecía el doble de alto sin motivo. Se alinean con la línea de texto,
+   no con la caja: de ahí el desplazamiento de 0.14em. */
 .ico {
+  display: inline-block;
   width: 1.15em; height: 1.15em; flex: none;
   fill: none; stroke: currentColor; stroke-width: 2;
   stroke-linecap: round; stroke-linejoin: round;
   vertical-align: -0.14em;
 }
+/* Cuando el icono y su texto son hermanos en una caja, la caja manda: en línea,
+   centrados y con un respiro entre los dos. Es la regla general de la app. */
+.sc-badge, .bk-pill, .mtag, .sc-avail, .bk-meta span, .sh-avail, .sh-pay,
+.udg, .pay-row, .bk-pay, .rep-origen, .notice, .gate-banner b, .hist-title,
+.f-label, .stage-caption, .today-banner b, .chart-total, .card-head h2 {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.sc-avail, .sh-avail, .sh-pay, .bk-pay, .notice, .udg { display: flex; }
+.card-head h2 { display: flex; }
 .ico-lg { width: 1.5em; height: 1.5em; }
 .ico-xl { width: 24px; height: 24px; stroke-width: 1.8; }
 .ico-fill { fill: currentColor; stroke: none; }
@@ -624,9 +636,20 @@ textarea {
 #portRing { stroke: var(--accent); }
 #portCore { fill: var(--accent); }
 .car-headlight { fill: var(--accent-2); }
+/* Luz de borde: una línea del acento por el filo de arriba de la carrocería.
+   Es lo que separa el carro del fondo negro y lo que hace que se lea como un
+   volumen y no como una silueta plana recortada. */
+.car-body { paint-order: stroke fill; }
+.car-model .car-body { stroke: rgba(var(--accent-rgb), 0.30); }
+.car-rim-light { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; opacity: 0.5; }
+.car-sill { fill: none; stroke: #000; stroke-opacity: 0.5; stroke-width: 7; stroke-linecap: round; }
+.car-door { fill: none; stroke: rgba(255,255,255,0.09); stroke-width: 1.6; stroke-linecap: round; }
 .head-glow { fill: var(--accent-2); }
 .wheel-rim { stroke: var(--accent); }
 .wheel-hub { fill: var(--accent); }
+/* Los radios se pintan con el acento a media opacidad: así el rin cambia de
+   color con la app en vez de quedarse en un azul fijo que no pega con nada. */
+.wheel-spokes path { fill: rgba(var(--accent-rgb), 0.16); stroke: rgba(var(--accent-rgb), 0.45); stroke-width: 1.2; stroke-linejoin: round; }
 #accentGrad stop:first-child { stop-color: var(--accent); }
 #accentGrad stop:last-child { stop-color: var(--accent-2); }
 #glowRad stop { stop-color: var(--accent); }
@@ -692,12 +715,19 @@ textarea {
   background: var(--surface-2); border: 1px solid var(--border);
   transition: border-color var(--dur-fast), background var(--dur-fast);
 }
+/* Miniatura de vehículo: carrocería llena, vidrios recortados del mismo color
+   del fondo del botón, y la rueda con llanta y rin. Los vidrios "vacíos" son
+   lo que hace que se distinga una pickup de un sedán a este tamaño. */
 .veh-btn .veh-sil { fill: var(--text-mute); transition: fill var(--dur-fast); }
-.veh-btn .veh-wheel { fill: var(--surface-3); }
-.veh-btn .veh-rack { stroke: var(--text-mute); stroke-width: 1.6; stroke-linecap: round; }
+.veh-btn .veh-glass { fill: var(--surface-2); }
+.veh-btn .veh-line { fill: none; stroke: var(--surface-2); stroke-width: 1.1; stroke-linecap: round; }
+.veh-btn .veh-tyre { fill: var(--text-mute); }
+.veh-btn .veh-hub { fill: var(--surface-2); }
 .veh-btn span { font-size: var(--t-micro); font-weight: var(--w-label); color: var(--text-mute); }
 .veh-btn.is-active { border-color: var(--accent); background: var(--surface-3); }
-.veh-btn.is-active .veh-sil { fill: var(--accent); }
+.veh-btn.is-active .veh-sil, .veh-btn.is-active .veh-tyre { fill: var(--accent); }
+.veh-btn.is-active .veh-glass, .veh-btn.is-active .veh-hub { fill: var(--surface-3); }
+.veh-btn.is-active .veh-line { stroke: var(--surface-3); }
 .veh-btn.is-active span { color: var(--text); }
 .veh-btn:active { transform: scale(0.97); }
 
@@ -775,10 +805,16 @@ textarea {
 .pgrid-note { font-size: var(--t-sm); color: var(--text-dim); line-height: 1.5; margin-top: 8px; min-height: 20px; }
 .pgrid-note b { color: var(--text); font-weight: var(--w-label); }
 /* Al publicar el puesto la rejilla es un campo del formulario, no un filtro:
-   no lleva "Todos" ni contador, y va con el ancho de los demás campos. */
-.pgrid--pick { grid-template-columns: repeat(4, 1fr); }
-.pgrid--pick .pcell { min-height: 70px; padding: 10px 2px 8px; }
-.pgrid--pick .pcell svg { width: 26px; height: 26px; }
+   no lleva "Todos" ni contador. Misma retícula de 3 que en la búsqueda —con
+   cuatro columnas los nombres se partían en tres renglones y no se entendía
+   nada—. La celda de relleno cierra la última fila para que el bloque se lea
+   como un rectángulo y no como una escalera. */
+.pgrid--pick { grid-template-columns: repeat(3, 1fr); }
+/* Un campo que ocupa las dos columnas del formulario. La rejilla de conectores
+   metida en media columna partía los nombres en tres renglones y empujaba a la
+   potencia fuera de su fila. */
+.field--full { grid-column: 1 / -1; }
+.pcell-filler { background: var(--surface); pointer-events: none; }
 .filter-rows .range { margin: 2px 0 0; }
 
 /* Lista de puestos */
@@ -792,9 +828,13 @@ textarea {
 .sc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .sc-name { font-size: var(--t-body); font-weight: var(--w-strong); }
 .sc-badges { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* La insignia es una línea: el icono y su palabra van juntos y no se parten.
+   Sin `nowrap` y con el icono en bloque, "Torre 1" se volvía una caja el doble
+   de alta y la mitad de ancha de lo que le corresponde. */
 .sc-badge {
-  font-size: var(--t-micro); font-weight: var(--w-label); padding: 4px 8px; border-radius: 999px;
+  font-size: var(--t-micro); font-weight: var(--w-label); padding: 5px 10px; border-radius: 999px;
   background: var(--surface-2); color: var(--text-mute); border: 1px solid var(--border);
+  white-space: nowrap; line-height: 1.35;
 }
 .sc-badge.b-ok { color: var(--accent-2); border-color: rgba(var(--accent-2-rgb),0.3); }
 .sc-badge.b-ver { color: var(--text-dim); }
@@ -1032,6 +1072,10 @@ textarea {
 }
 .chart-in .chart-bar { transform: scaleY(1); }
 .chart-bar.bar-zero { cursor: default; }
+/* El día más alto lleva un filo del acento arriba: marca el pico sin cambiar
+   la altura, que es el dato. */
+.chart-bar.bar-peak { stroke: var(--accent); stroke-width: 1.4; }
+.chart-axis { font-variant-numeric: tabular-nums; }
 .chart-val { opacity: 0; transition: opacity 0.4s ease 0.3s; }
 .chart-in .chart-val { opacity: 1; }
 .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1273,8 +1317,21 @@ textarea {
 /* `nowrap`: la cifra crece de "$0" a "$1.234.567" mientras se cuenta, y al llegar
    al ancho de la tarjeta partía en dos líneas. Eso cambiaba el alto de la fila del
    grid a media cuenta y empujaba media pantalla. Una cifra, una línea. */
-.metric-val { font-family: var(--font-display); font-size: var(--t-num); font-weight: var(--w-strong); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 0.3px; line-height: 1.2; margin-top: 8px; white-space: nowrap; }
+/* Dos reglas que trabajan juntas:
+   `nowrap` porque la cifra crece dígito a dígito mientras se cuenta, y al llegar
+   al ancho de la tarjeta partía en dos líneas a media cuenta, empujando media
+   pantalla. Y el tamaño elástico porque en un celular de 390px la tarjeta deja
+   139px libres, mientras que "$ 293.055" en Orbitron a 24px pide 154 y se
+   salía del recuadro. Se achica lo justo para caber, sin dejar de ser la cifra
+   más grande de la pantalla. */
+.metric-val {
+  font-family: var(--font-display); font-size: clamp(17px, 5.4vw, 24px);
+  font-weight: var(--w-strong); color: var(--text); font-variant-numeric: tabular-nums;
+  letter-spacing: 0; line-height: 1.2; margin-top: 8px; white-space: nowrap;
+}
 .metric-label { font-size: var(--t-sm); color: var(--text-mute); }
+/* Pasado el ancho máximo de la app, los vw dejan de crecer con la tarjeta. */
+@media (min-width: 640px) { .metric-val { font-size: var(--t-num); } }
 
 /* Reporte mensual */
 .rep-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 16px; }
@@ -1321,9 +1378,13 @@ textarea {
 .user-manage { flex-shrink: 0; }
 .user-detail-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
 .user-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.udg { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px 12px; }
-.udg span { display: block; font-size: var(--t-micro); color: var(--text-mute); margin-bottom: 4px; }
-.udg b { font-size: var(--t-sm); font-weight: var(--w-label); word-break: break-word; }
+/* El rótulo y su icono en una línea, y el dato debajo. Con el icono en bloque
+   el rótulo ocupaba dos renglones y la tarjeta del residente crecía el doble
+   de alto sin decir nada más. */
+.udg { display: block; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px; }
+.udg span { display: flex; align-items: center; gap: 5px; font-size: var(--t-micro); color: var(--text-mute); margin-bottom: 4px; }
+.udg span .ico { width: 13px; height: 13px; }
+.udg b { display: block; font-size: var(--t-sm); font-weight: var(--w-label); word-break: break-word; }
 
 /* =========================================================
    v2.3 — Pago Bre-B / QR
@@ -1434,7 +1495,11 @@ button { -webkit-tap-highlight-color: transparent; }
 /* =========================================================
    v2.5 — Lectura del contador por foto
    ========================================================= */
-.in-cam { flex: none; width: 34px; height: 34px; margin-right: 2px; border-radius: var(--r-sm); font-size: var(--t-body); line-height: 1; background: var(--surface-3); border: 1px solid var(--border); color: var(--text-dim); }
+/* `grid + place-items: center` centra el icono en los dos ejes. Antes era un
+   botón con el icono como texto en línea, y el desplazamiento vertical del
+   `.ico` lo dejaba pegado al borde de arriba. */
+.in-cam { flex: none; width: 34px; height: 34px; margin-right: 2px; border-radius: var(--r-sm); display: grid; place-items: center; background: var(--surface-3); border: 1px solid var(--border); color: var(--text-dim); }
+.in-cam .ico { vertical-align: 0; }
 .in-cam:active { transform: scale(0.94); }
 .ocr-box { max-height: 78vh; overflow-y: auto; }
 .ocr-stage { position: relative; border-radius: var(--r-sm); overflow: hidden; background: #000; touch-action: none; line-height: 0; }

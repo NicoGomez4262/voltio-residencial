@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Exo+2:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="/css/styles.css?v=2.10.0" />
+  <link rel="stylesheet" href="/css/styles.css?v=2.10.1" />
 
   <style>
   /* ---------- Bienvenida (crítico: va incrustado para pintarse al instante) ---------- */
@@ -106,7 +106,7 @@
   }
 </style>
 </head>
-<body data-accent="cyan">
+<body data-accent="green">
   <!-- BIENVENIDA
        Va con sus estilos incrustados y su script propio: así se ve al instante,
        sin esperar a que descarguen styles.css ni app.js. -->
@@ -191,37 +191,52 @@
        sistema y no obedecen ni al color ni al tamaño óptico.
        ============================================================ -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
-    <symbol id="i-money" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/></symbol>
+    <symbol id="i-money" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.8"/><path d="M5.5 9.6v4.8M18.5 9.6v4.8"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></symbol>
-    <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2.5"/><path d="M22 10v4"/><path d="M6 11v2M10 11v2"/></symbol>
+    <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="16.5" height="10" rx="2.5"/><path d="M21.5 10.5v3"/><path d="M11.4 9.4 8.6 12.6h2.9l-.5 2.4 2.9-3.3h-2.9z" stroke-linejoin="round"/></symbol>
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></symbol>
-    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
-    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M8 3v5M16 3v5"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></symbol>
-    <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 7h3M8 11h3M8 15h3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 6.6V12l3.8 2.2"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M8.6 2.8v4.6M15.4 2.8v4.6"/><path d="M5.8 7.4h12.4v3.3a6.2 6.2 0 0 1-12.4 0z" stroke-linejoin="round"/><path d="M12 16.9V21"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V4.4A1.4 1.4 0 0 1 5.4 3h7.2A1.4 1.4 0 0 1 14 4.4V21"/><path d="M14 9.5h4.6A1.4 1.4 0 0 1 20 10.9V21"/><path d="M2.5 21h19"/><path d="M7 6.8h1M11 6.8h1M7 10.4h1M11 10.4h1M7 14h1M11 14h1M17 14h1M7 17.6h1M11 17.6h1M17 17.6h1"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></symbol>
     <symbol id="i-parking" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 17V8h3.5a2.75 2.75 0 0 1 0 5.5H9"/></symbol>
-    <symbol id="i-size" viewBox="0 0 24 24"><path d="M3 6V4h18v2M3 18v2h18v-2"/><path d="M3 12h18"/><path d="M7 9l-3 3 3 3M17 9l3 3-3 3"/></symbol>
-    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-size" viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="1.6"/><path d="M6.5 8v3.2M10 8v4.4M13.5 8v3.2M17 8v4.4"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8.6a2 2 0 0 1 2-2h1.9l1.3-2h7.6l1.3 2H19a2 2 0 0 1 2 2v9.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.6"/><path d="M17.6 9.6h.01"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
-    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18.2 8.6a6.2 6.2 0 0 0-12.4 0c0 4.4-1 6.4-2.2 7.6a.7.7 0 0 0 .5 1.2h15.8a.7.7 0 0 0 .5-1.2c-1.2-1.2-2.2-3.2-2.2-7.6z" stroke-linejoin="round"/><path d="M10.1 20.4a2.2 2.2 0 0 0 3.8 0"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
-    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M13.5 2.8H7A2 2 0 0 0 5 4.8v14.4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.3z" stroke-linejoin="round"/><path d="M13.5 2.8v4.1a1.4 1.4 0 0 0 1.4 1.4H19" stroke-linejoin="round"/><path d="M8.6 13h6.8M8.6 16.6h4.4"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></symbol>
+    <!-- Bandeja de entrada: una flecha hacia abajo decía "descargar" y hacía
+         pensar que ahí se sube un archivo. Esto es una solicitud que llega. -->
+    <symbol id="i-inbox" viewBox="0 0 24 24">
+      <path d="M3 13.2 5.6 5.4A2 2 0 0 1 7.5 4h9a2 2 0 0 1 1.9 1.4L21 13.2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke-linejoin="round"/>
+      <path d="M3 13.2h4.4l1.3 2.6h6.6l1.3-2.6H21"/>
+    </symbol>
     <symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h3"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6.1L12 16.8 6.7 19.7l1.1-6.1L3.4 9.4l6-.8z"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
-    <symbol id="i-car" viewBox="0 0 24 24"><path d="M3 16v-3.5l2-4.5a2 2 0 0 1 1.9-1.3h10.2A2 2 0 0 1 19 8l2 4.5V16"/><path d="M3 13h18"/><circle cx="7" cy="16.5" r="1.8"/><circle cx="17" cy="16.5" r="1.8"/></symbol>
+    <!-- Perfil de carro con capó, cabina y baúl diferenciados: el trapecio con
+         dos ruedas no se leía como un carro. El techo arranca detrás del eje
+         delantero y baja hacia atrás, que es lo que da la silueta. -->
+    <symbol id="i-car" viewBox="0 0 24 24">
+      <path d="M2.5 16.5v-3.2a1.6 1.6 0 0 1 .9-1.45l2.4-1.15 2.3-2.5A2.4 2.4 0 0 1 9.85 7.4h4.55a2.4 2.4 0 0 1 1.6.6l3.1 2.7 2 .55a1.6 1.6 0 0 1 1.2 1.55v3.7h-2.1"/>
+      <path d="M8.9 16.5h6.2"/>
+      <path d="M6.2 10.9h11.6"/>
+      <path d="M11.6 7.4v3.5"/>
+      <circle cx="7" cy="16.7" r="2.1"/><circle cx="17" cy="16.7" r="2.1"/>
+    </symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6.5"/></symbol>
     <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17.2v.01"/></symbol>
     <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></symbol>
-    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H7a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4.75 4.75 0 0 1-.5 9.5z"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7.2 18.5A4.2 4.2 0 0 1 6.6 10.1a5.6 5.6 0 0 1 10.7 1 4.1 4.1 0 0 1-.6 8.15z" stroke-linejoin="round"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18.5h2"/></symbol>
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></symbol>
-    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M4 20c0-9 6-14 16-14 0 10-5 15-13 15H4z"/><path d="M4 20c3-4 6-6 10-8"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M4.5 19.5c-1.6-6.5 2.5-13 15-13.5.8 8.5-4 14-11 14z" stroke-linejoin="round"/><path d="M4.5 19.5C7 15 10.5 11.8 15 9.6"/></symbol>
     <symbol id="i-id" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><circle cx="8.5" cy="11" r="2.2"/><path d="M5 16.2c.7-1.4 2-2.2 3.5-2.2s2.8.8 3.5 2.2"/><path d="M15 10h4M15 14h3"/></symbol>
-    <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M7 3h10M7 21h10"/><path d="M7 3v3.5L12 12l5-5.5V3M7 21v-3.5L12 12l5 5.5V21"/></symbol>
-    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M12 11V4.5a1.5 1.5 0 0 1 3 0V11"/><path d="M15 11V6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-4.6-2.1L4 16.5a1.6 1.6 0 0 1 2.3-2.2L9 16.5V8.5a1.5 1.5 0 0 1 3 0"/></symbol>
+    <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6.5 3h11M6.5 21h11"/><path d="M7.6 3v3.6L12 12l-4.4 5.4V21M16.4 3v3.6L12 12l4.4 5.4V21" stroke-linejoin="round"/><path d="M9.8 18.8h4.4"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11.5V5.2a1.6 1.6 0 0 1 3.2 0v5.1"/><path d="M12.2 10.3V6.4a1.6 1.6 0 0 1 3.2 0v4.6"/><path d="M15.4 11V8.4a1.6 1.6 0 0 1 3.2 0V14a7 7 0 0 1-7 7 6.6 6.6 0 0 1-6.6-6.6V10a1.6 1.6 0 0 1 3.2 0" stroke-linejoin="round"/></symbol>
     <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.8 12.2 20 3"/><path d="M17 6l2.5 2.5M14.5 8.5 17 11"/></symbol>
 
     <!-- Conectores, dibujados de frente como se ven en el cable. El Tipo 1 es
@@ -247,15 +262,28 @@
       <rect x="9.5" y="32" width="29" height="13.5" rx="6.75"/>
       <circle cx="18" cy="38.75" r="3.5"/><circle cx="30" cy="38.75" r="3.5"/>
     </symbol>
+    <!-- Tesla: la boca ancha con dos pines grandes arriba y tres chicos abajo.
+         Es el único con la parte inferior recta, y eso es lo que lo distingue. -->
+    <symbol id="i-p-tesla" viewBox="0 0 48 48">
+      <path d="M24 5a19 19 0 0 1 19 19c0 7-5.5 11.5-19 11.5S5 31 5 24A19 19 0 0 1 24 5Z"/>
+      <circle cx="15.5" cy="19" r="4.6"/><circle cx="32.5" cy="19" r="4.6"/>
+      <path d="M13 28.5h22"/>
+      <circle cx="17.5" cy="31.5" r="2"/><circle cx="24" cy="31.8" r="2.3"/><circle cx="30.5" cy="31.5" r="2"/>
+    </symbol>
     <symbol id="i-p-dom" viewBox="0 0 48 48">
       <circle cx="24" cy="24" r="19"/>
       <rect x="15.2" y="13.5" width="4.2" height="11.5" rx="2.1"/>
       <rect x="28.6" y="13.5" width="4.2" height="11.5" rx="2.1"/>
       <circle cx="24" cy="32.5" r="3.6"/>
     </symbol>
+    <!-- "Todos" no es un conector, así que no se dibuja como uno: cuatro
+         casillas en rejilla se leen como "todas las opciones" sin ambigüedad.
+         Mezclar cuatro siluetas de conector distintas quedaba como un borrón. -->
     <symbol id="i-p-all" viewBox="0 0 48 48">
-      <circle cx="16" cy="16" r="6.2"/><path d="M28 10 H44 A7 7 0 1 1 28 10 Z"/>
-      <rect x="7" y="28" width="17" height="12" rx="6"/><circle cx="38" cy="34" r="6.2"/>
+      <rect x="7" y="7" width="15" height="15" rx="4.5"/>
+      <rect x="26" y="7" width="15" height="15" rx="4.5"/>
+      <rect x="7" y="26" width="15" height="15" rx="4.5"/>
+      <rect x="26" y="26" width="15" height="15" rx="4.5"/>
     </symbol>
   </defs></svg>
 
@@ -323,7 +351,6 @@
               <span class="f-label"><svg class="ico" aria-hidden="true"><use href="#i-size"/></svg> Tamaño del puesto</span>
               <div class="chips chips-scroll" id="fSize">
                 <button class="chip is-active" data-size="todos" type="button">Todos</button>
-                <button class="chip" data-size="Pequeño" type="button">Pequeño +</button>
                 <button class="chip" data-size="Mediano" type="button">Mediano +</button>
                 <button class="chip" data-size="Grande" type="button">Grande</button>
               </div>
@@ -416,7 +443,7 @@
           <div class="card">
             <div class="card-head"><h2>Solicitudes nuevas</h2><span class="chart-total" id="novReqCount"></span></div>
             <div id="novReqEmpty" class="empty">
-              <div class="empty-icon"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg></div><p>Sin solicitudes por ahora.</p><span>Cuando alguien pida tu puesto, aparecerá aquí.</span>
+              <div class="empty-icon"><svg class="ico" aria-hidden="true"><use href="#i-inbox"/></svg></div><p>Sin solicitudes por ahora.</p><span>Cuando alguien pida tu puesto, aparecerá aquí.</span>
             </div>
             <ul id="novReqList" class="book-list"></ul>
           </div>
@@ -475,8 +502,8 @@
               <div class="field"><label for="spName">Nombre del puesto</label><div class="input-wrap"><input id="spName" type="text" placeholder="Ej: Puesto de Carlos" autocomplete="off"/></div></div>
               <div class="field"><label for="spTorre">Torre</label><div class="input-wrap select-wrap"><select id="spTorre"><option value="">Selecciona…</option></select></div></div>
               <div class="field"><label for="spNum">Número de parqueadero</label><div class="input-wrap"><input id="spNum" type="text" placeholder="Ej: P-124" autocomplete="off"/></div></div>
-              <div class="field"><label for="spSize">Tamaño</label><div class="input-wrap select-wrap"><select id="spSize"><option>Pequeño</option><option selected>Mediano</option><option>Grande</option></select></div></div>
-              <div class="field"><span class="field-label">Tipo de puerto</span><div class="pgrid pgrid--pick" id="spPort" role="group" aria-label="Tipo de puerto"></div><p class="hint">Mira el conector de tu cargador y elige el que se le parezca.</p></div>
+              <div class="field"><label for="spSize">Tamaño</label><div class="input-wrap select-wrap"><select id="spSize"><option selected>Mediano</option><option>Grande</option></select></div></div>
+              <div class="field field--full"><span class="field-label">Tipo de puerto</span><div class="pgrid pgrid--pick" id="spPort" role="group" aria-label="Tipo de puerto"></div><p class="hint">Mira el conector de tu cargador y elige el que se le parezca.</p></div>
               <div class="field"><label for="spPow">Potencia</label><div class="input-wrap select-wrap"><select id="spPow"><option value="3.6">3,6 kW (doméstico)</option><option value="7.4" selected>7,4 kW</option><option value="11">11 kW</option><option value="22">22 kW</option><option value="otra">Otra…</option></select></div></div>
               <div class="field hidden" id="spPowOtraField"><label for="spPowOtra">¿Cuánta potencia da tu cargador?</label><div class="input-wrap"><input id="spPowOtra" inputmode="decimal" placeholder="Ej: 9,6" autocomplete="off"/><span class="unit">kW</span></div><p class="hint" style="margin-top:6px">Está en la etiqueta del cargador o en su manual. Si solo ves amperios: multiplícalos por 220 y divide entre 1.000.</p></div>
             </div>
@@ -762,10 +789,10 @@
           <div id="vehBlock">
           <label class="field-label">Tu vehículo</label>
           <div class="veh-row" id="vehRow">
-            <button class="veh-btn" data-veh="sedan" type="button"><svg viewBox="0 0 48 20" width="48" height="20"><path class="veh-sil" d="M4 14 Q4 11 8 10 L14 9 Q19 4 26 4 Q32 4 36 8 L41 10 Q45 11 45 13 Q45 16 42 16 L7 16 Q4 16 4 14 Z"/><circle class="veh-wheel" cx="13" cy="16" r="3"/><circle class="veh-wheel" cx="37" cy="16" r="3"/></svg><span>Automóvil</span></button>
-            <button class="veh-btn is-active" data-veh="pickup" type="button"><svg viewBox="0 0 48 20" width="48" height="20"><path class="veh-sil" d="M4 14 L4 8 Q4 7 6 7 L20 6.5 Q22 3 27 3 L32 3 Q36 3.5 38 7 L41 8 Q45 9 45 13 Q45 16 42 16 L7 16 Q4 16 4 14 Z"/><circle class="veh-wheel" cx="13" cy="16" r="3"/><circle class="veh-wheel" cx="37" cy="16" r="3"/></svg><span>Pickup</span></button>
-            <button class="veh-btn" data-veh="suv" type="button"><svg viewBox="0 0 48 20" width="48" height="20"><path class="veh-sil" d="M4 13 Q4 10 7 9 Q9 4.5 15 4 L28 3.5 Q34 4 38 8 L42 9.5 Q45 10.5 45 13 Q45 16 42 16 L7 16 Q4 16 4 13 Z"/><circle class="veh-wheel" cx="13" cy="16" r="3"/><circle class="veh-wheel" cx="37" cy="16" r="3"/></svg><span>SUV</span></button>
-            <button class="veh-btn" data-veh="4x4" type="button"><svg viewBox="0 0 48 20" width="48" height="20"><path class="veh-sil" d="M4 14 L4 6 Q4 5 6 5 L30 4.5 Q32 4.5 33 6 L36 9 L42 10 Q45 10.5 45 13 Q45 16 42 16 L7 16 Q4 16 4 14 Z"/><line class="veh-rack" x1="8" y1="3.4" x2="28" y2="3"/><circle class="veh-wheel" cx="13" cy="16" r="3"/><circle class="veh-wheel" cx="37" cy="16" r="3"/></svg><span>4x4</span></button>
+            <button class="veh-btn" data-veh="sedan" type="button"><svg viewBox="0 0 36 20" width="36" height="20"><path class="veh-sil" d="M3 15.6v-2.7a1.3 1.3 0 0 1 .8-1.2l3.4-1.5 3-3.2A2.7 2.7 0 0 1 12.1 6h7.6a2.7 2.7 0 0 1 1.8.7l3.5 3.4 3.8.9A1.7 1.7 0 0 1 30 12.6v3z"/><path class="veh-glass" d="M11.9 10.4l2.4-2.5h4.9v2.4z"/><path class="veh-glass" d="M20.4 7.9h2.3l2.7 2.4-5 .1z"/><path class="veh-line" d="M19.6 7.9v7.7"/><circle class="veh-tyre" cx="10" cy="15.6" r="3.6"/><circle class="veh-hub" cx="10" cy="15.6" r="1.5"/><circle class="veh-tyre" cx="25" cy="15.6" r="3.6"/><circle class="veh-hub" cx="25" cy="15.6" r="1.5"/></svg><span>Automóvil</span></button>
+            <button class="veh-btn is-active" data-veh="pickup" type="button"><svg viewBox="0 0 36 20" width="36" height="20"><path class="veh-sil" d="M3 15.6V9.6a.9.9 0 0 1 .9-.9l11.4-.3 2.3-2.4A2.5 2.5 0 0 1 19.4 5.2h4.2a2.5 2.5 0 0 1 1.8.8l2.9 3 3.5.8A1.7 1.7 0 0 1 33 11.5v4.1z"/><path class="veh-glass" d="M19.4 8.2l1.7-1.9h2.9v1.9z"/><path class="veh-glass" d="M25.1 6.3h1.6l2 1.9-3.6.1z"/><path class="veh-line" d="M4 8.9h11.2"/><circle class="veh-tyre" cx="10" cy="15.6" r="3.6"/><circle class="veh-hub" cx="10" cy="15.6" r="1.5"/><circle class="veh-tyre" cx="27" cy="15.6" r="3.6"/><circle class="veh-hub" cx="27" cy="15.6" r="1.5"/></svg><span>Pickup</span></button>
+            <button class="veh-btn" data-veh="suv" type="button"><svg viewBox="0 0 36 20" width="36" height="20"><path class="veh-sil" d="M3 15.6v-3.4a1.4 1.4 0 0 1 .9-1.3l2.4-1 2.8-3.3A3.1 3.1 0 0 1 11.5 5.4h8.9a3.1 3.1 0 0 1 2 .8l3.7 3.4 4 .9A1.8 1.8 0 0 1 32 12.3v3.3z"/><path class="veh-glass" d="M10.9 10.2l2.3-2.7h5.4v2.6z"/><path class="veh-glass" d="M19.9 7.5h2l3.1 2.7-5.1.1z"/><path class="veh-line" d="M19.1 7.5v8.1"/><circle class="veh-tyre" cx="10" cy="15.6" r="3.6"/><circle class="veh-hub" cx="10" cy="15.6" r="1.5"/><circle class="veh-tyre" cx="26" cy="15.6" r="3.6"/><circle class="veh-hub" cx="26" cy="15.6" r="1.5"/></svg><span>SUV</span></button>
+            <button class="veh-btn" data-veh="4x4" type="button"><svg viewBox="0 0 36 20" width="36" height="20"><path class="veh-sil" d="M3 15.6V6.8a.9.9 0 0 1 .9-.9h20.6a1.7 1.7 0 0 1 1.3.6l2.7 3.3 3.7.9A1.8 1.8 0 0 1 33 12.5v3.1z"/><path class="veh-glass" d="M6.6 10V7.7h8.5V10z"/><path class="veh-glass" d="M17.3 7.7h6.6l1.9 2.3-8.5-.1z"/><path class="veh-line" d="M16.4 7.7v7.9"/><path class="veh-line" d="M5 4.6h18.5"/><circle class="veh-tyre" cx="10" cy="15.6" r="3.6"/><circle class="veh-hub" cx="10" cy="15.6" r="1.5"/><circle class="veh-tyre" cx="27" cy="15.6" r="3.6"/><circle class="veh-hub" cx="27" cy="15.6" r="1.5"/></svg><span>4x4</span></button>
           </div>
           </div>
           <label class="field-label" id="accentLabel">Color de acento</label>
@@ -785,7 +812,7 @@
           <div class="data-actions"><button id="exportBtn2" class="btn-ghost" type="button">Exportar recibos (CSV)</button><button id="resetBtn" class="btn-ghost btn-danger" type="button">Restablecer datos locales</button></div>
         </div>
 
-        <p class="version">Voltio Residencial v2.10.0 · Piloto conjunto MontReal <svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg></p>
+        <p class="version">Voltio Residencial v2.10.1 · Piloto conjunto MontReal <svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg></p>
       </section>
 
       <!-- ============ ADMIN: PANEL ============ -->
@@ -980,11 +1007,11 @@
             <ellipse class="car-shadow" cx="262" cy="285" rx="238" ry="18" fill="#000" opacity="0.45" filter="url(#soft)"/>
             <ellipse class="car-underglow" cx="262" cy="283" rx="205" ry="13" fill="url(#glowRad)" opacity="0.6"/>
             <g id="speedLines" stroke-linecap="round"><line x1="-12" y1="188" x2="-66" y2="188"/><line x1="-4" y1="212" x2="-74" y2="212"/><line x1="-14" y1="234" x2="-60" y2="234"/></g>
-            <g class="wheel" transform="translate(120,248)"><circle r="38" fill="#0a0f18" stroke="#1c2740" stroke-width="3"/><circle class="wheel-rim" r="38" fill="none" stroke-opacity="0.12" stroke-width="2"/><g class="wheel-spin"><circle r="17" fill="#141c2e"/><g stroke="#38507e" stroke-width="3" stroke-linecap="round"><line x1="0" y1="-16" x2="0" y2="16"/><line x1="-16" y1="0" x2="16" y2="0"/><line x1="-11.5" y1="-11.5" x2="11.5" y2="11.5"/><line x1="-11.5" y1="11.5" x2="11.5" y2="-11.5"/></g><circle class="wheel-hub" r="4.5"/></g></g>
-            <g class="wheel" transform="translate(425,248)"><circle r="38" fill="#0a0f18" stroke="#1c2740" stroke-width="3"/><circle class="wheel-rim" r="38" fill="none" stroke-opacity="0.12" stroke-width="2"/><g class="wheel-spin"><circle r="17" fill="#141c2e"/><g stroke="#38507e" stroke-width="3" stroke-linecap="round"><line x1="0" y1="-16" x2="0" y2="16"/><line x1="-16" y1="0" x2="16" y2="0"/><line x1="-11.5" y1="-11.5" x2="11.5" y2="11.5"/><line x1="-11.5" y1="11.5" x2="11.5" y2="-11.5"/></g><circle class="wheel-hub" r="4.5"/></g></g>
+            <g class="wheel" transform="translate(120,248)"><circle r="38" fill="#080d16"/><circle r="38" fill="none" stroke="#232f4a" stroke-width="2.5"/><circle r="31" fill="none" stroke="#121a2b" stroke-width="7"/><g class="wheel-spin"><circle r="26.5" fill="#0d1424"/><circle class="wheel-rim" r="26.5" fill="none" stroke-width="1.6" stroke-opacity="0.55"/><g class="wheel-spokes"><path d="M 2.1 -7.5 L 4.6 -24.0 Q 0.0 -25.2 -4.6 -24.0 L -2.1 -7.5 Z"/><path d="M 7.8 -0.3 L 24.2 -3.0 Q 24.0 -7.8 21.4 -11.8 L 6.5 -4.3 Z"/><path d="M 2.7 7.3 L 10.4 22.1 Q 14.8 20.4 17.8 16.7 L 6.1 4.8 Z"/><path d="M -6.1 4.8 L -17.8 16.7 Q -14.8 20.4 -10.4 22.1 L -2.7 7.3 Z"/><path d="M -6.5 -4.3 L -21.4 -11.8 Q -24.0 -7.8 -24.2 -3.0 L -7.8 -0.3 Z"/></g><circle r="7.5" fill="#151d2f"/><circle class="wheel-hub" r="4.2"/></g><path d="M -34 17 A 38 38 0 0 0 34 17" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="6" stroke-linecap="round"/></g>
+            <g class="wheel" transform="translate(425,248)"><circle r="38" fill="#080d16"/><circle r="38" fill="none" stroke="#232f4a" stroke-width="2.5"/><circle r="31" fill="none" stroke="#121a2b" stroke-width="7"/><g class="wheel-spin"><circle r="26.5" fill="#0d1424"/><circle class="wheel-rim" r="26.5" fill="none" stroke-width="1.6" stroke-opacity="0.55"/><g class="wheel-spokes"><path d="M 2.1 -7.5 L 4.6 -24.0 Q 0.0 -25.2 -4.6 -24.0 L -2.1 -7.5 Z"/><path d="M 7.8 -0.3 L 24.2 -3.0 Q 24.0 -7.8 21.4 -11.8 L 6.5 -4.3 Z"/><path d="M 2.7 7.3 L 10.4 22.1 Q 14.8 20.4 17.8 16.7 L 6.1 4.8 Z"/><path d="M -6.1 4.8 L -17.8 16.7 Q -14.8 20.4 -10.4 22.1 L -2.7 7.3 Z"/><path d="M -6.5 -4.3 L -21.4 -11.8 Q -24.0 -7.8 -24.2 -3.0 L -7.8 -0.3 Z"/></g><circle r="7.5" fill="#151d2f"/><circle class="wheel-hub" r="4.2"/></g><path d="M -34 17 A 38 38 0 0 0 34 17" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="6" stroke-linecap="round"/></g>
             <g id="carBodyGrp">
               <g class="car-model" data-model="pickup">
-                <path class="car-body" d="M 48 242 C 36 242 30 235 30 225 L 30 196 C 30 189 35 185 43 184 L 208 181 C 218 149 236 135 262 133 L 318 131 C 338 132 354 141 370 157 C 381 167 391 171 402 173 L 448 175 C 471 177 487 187 489 203 L 489 219 C 489 233 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 48 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/>
+                <path class="car-body" d="M 48 242 C 36 242 30 235 30 225 L 30 196 C 30 189 35 185 43 184 L 208 181 C 218 149 236 135 262 133 L 318 131 C 338 132 354 141 370 157 C 381 167 391 171 402 173 L 448 175 C 471 177 487 187 489 203 L 489 219 C 489 233 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 48 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/><path class="car-rim-light" d="M 216 179 C 226 148 242 134 264 132 L 318 130 C 339 131 356 141 372 157"/><path class="car-sill" d="M 172 236 L 372 236"/><path class="car-door" d="M 236 176 L 236 234"/>
                 <path class="car-gloss" d="M 214 178 C 224 150 240 137 264 135 L 318 133 C 337 134 352 142 366 156 C 340 146 260 148 214 178 Z" fill="url(#bodyGloss)"/>
                 <path d="M 38 184 L 206 181 L 206 190 L 38 192 Z" fill="#0a1322" opacity="0.85"/>
                 <path class="car-cabin" d="M 236 174 C 244 149 258 138 276 136 L 317 134 C 336 135 351 143 366 158 C 372 164 378 167 384 169 C 337 163 272 166 236 174 Z" fill="#0a1322" opacity="0.92"/>
@@ -994,7 +1021,7 @@
                 <rect x="28" y="190" width="7" height="26" rx="3" fill="#ff5d6c"/>
               </g>
               <g class="car-model" data-model="sedan">
-                <path class="car-body" d="M 48 242 C 36 242 30 234 30 222 L 30 208 C 30 198 38 192 52 190 C 60 172 76 162 100 158 L 148 154 C 170 132 202 120 246 118 L 286 118 C 330 120 362 134 388 158 L 430 166 C 462 172 482 182 487 198 L 489 214 C 489 230 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 48 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/>
+                <path class="car-body" d="M 48 242 C 36 242 30 234 30 222 L 30 208 C 30 198 38 192 52 190 C 60 172 76 162 100 158 L 148 154 C 170 132 202 120 246 118 L 286 118 C 330 120 362 134 388 158 L 430 166 C 462 172 482 182 487 198 L 489 214 C 489 230 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 48 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/><path class="car-rim-light" d="M 150 155 C 172 132 205 119 246 117 L 286 117 C 330 119 363 133 390 157"/><path class="car-sill" d="M 172 236 L 372 236"/><path class="car-door" d="M 252 120 L 252 234"/>
                 <path class="car-gloss" d="M 110 162 C 150 136 205 122 250 120 C 300 120 340 132 380 156 C 330 140 190 142 110 162 Z" fill="url(#bodyGloss)"/>
                 <path class="car-cabin" d="M 150 156 C 172 134 204 122 246 120 L 284 120 C 324 122 354 136 378 156 C 330 146 200 148 150 156 Z" fill="#0a1322" opacity="0.92"/>
                 <path class="car-window" d="M 162 152 C 182 134 210 124 244 122 L 250 122 L 250 146 C 216 147 186 149 162 152 Z" fill="url(#glassGrad)"/>
@@ -1002,7 +1029,7 @@
                 <rect x="28" y="196" width="7" height="22" rx="3" fill="#ff5d6c"/>
               </g>
               <g class="car-model" data-model="suv">
-                <path class="car-body" d="M 46 242 C 35 242 30 234 30 222 L 30 196 C 30 184 36 174 50 168 C 66 140 96 124 136 120 L 250 116 C 296 116 332 128 360 150 C 380 162 402 168 428 171 L 452 173 C 475 176 488 187 489 203 L 489 218 C 489 232 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 46 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/>
+                <path class="car-body" d="M 46 242 C 35 242 30 234 30 222 L 30 196 C 30 184 36 174 50 168 C 66 140 96 124 136 120 L 250 116 C 296 116 332 128 360 150 C 380 162 402 168 428 171 L 452 173 C 475 176 488 187 489 203 L 489 218 C 489 232 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 46 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/><path class="car-rim-light" d="M 118 158 C 142 131 178 122 220 119 L 250 115 C 297 115 333 127 361 149"/><path class="car-sill" d="M 172 236 L 372 236"/><path class="car-door" d="M 252 118 L 252 234"/>
                 <path class="car-gloss" d="M 80 152 C 120 126 180 118 240 117 C 300 117 336 130 362 152 C 320 136 160 138 80 152 Z" fill="url(#bodyGloss)"/>
                 <path class="car-cabin" d="M 118 158 C 140 132 175 122 215 120 L 280 119 C 316 121 342 132 362 150 C 300 140 170 144 118 158 Z" fill="#0a1322" opacity="0.92"/>
                 <path class="car-window" d="M 130 154 C 152 134 184 125 220 123 L 248 122.5 L 248 147 C 205 148 165 150 130 154 Z" fill="url(#glassGrad)"/>
@@ -1010,7 +1037,7 @@
                 <rect x="28" y="184" width="7" height="26" rx="3" fill="#ff5d6c"/>
               </g>
               <g class="car-model" data-model="4x4">
-                <path class="car-body" d="M 44 242 C 34 242 30 235 30 226 L 30 158 C 30 148 36 142 46 142 L 60 141 C 64 132 72 128 84 128 L 320 126 C 332 126 340 130 346 138 L 366 162 C 372 168 380 170 390 171 L 452 174 C 474 176 488 187 489 202 L 489 219 C 489 233 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 44 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/>
+                <path class="car-body" d="M 44 242 C 34 242 30 235 30 226 L 30 158 C 30 148 36 142 46 142 L 60 141 C 64 132 72 128 84 128 L 320 126 C 332 126 340 130 346 138 L 366 162 C 372 168 380 170 390 171 L 452 174 C 474 176 488 187 489 202 L 489 219 C 489 233 484 242 472 242 A 47 47 0 0 0 378 242 L 167 242 A 47 47 0 0 0 73 242 L 44 242 Z" fill="url(#bodyGrad)" stroke="rgba(130,170,225,0.28)" stroke-width="1.5"/><path class="car-rim-light" d="M 62 140 C 66 131 74 127 85 127 L 320 125 C 333 125 341 130 347 138 L 366 161"/><path class="car-door" d="M 244 128 L 244 226"/>
                 <path class="car-gloss" d="M 66 138 C 74 130 82 128 92 128 L 316 126 C 328 126 336 130 342 137 C 300 130 130 132 66 138 Z" fill="url(#bodyGloss)"/>
                 <line x1="88" y1="122" x2="330" y2="120" stroke="rgba(255,255,255,0.22)" stroke-width="3" stroke-linecap="round"/>
                 <path class="car-window" d="M 100 154 L 100 138 C 100 134 103 132 108 132 L 238 130 L 238 152 C 190 152.5 140 153 100 154 Z" fill="url(#glassGrad)"/>
@@ -1135,11 +1162,11 @@
     </defs>
   </svg>
 
-  <script type="module" src="/js/backend.js?v=2.10.0"></script>
-  <script defer src="/js/reporte.js?v=2.10.0"></script>
-  <script defer src="/js/wompi.js?v=2.10.0"></script>
-  <script defer src="/js/recibo.js?v=2.10.0"></script>
-  <script defer src="/js/ocr.js?v=2.10.0"></script>
-  <script defer src="/js/app.js?v=2.10.0"></script>
+  <script type="module" src="/js/backend.js?v=2.10.1"></script>
+  <script defer src="/js/reporte.js?v=2.10.1"></script>
+  <script defer src="/js/wompi.js?v=2.10.1"></script>
+  <script defer src="/js/recibo.js?v=2.10.1"></script>
+  <script defer src="/js/ocr.js?v=2.10.1"></script>
+  <script defer src="/js/app.js?v=2.10.1"></script>
 </body>
 </html>

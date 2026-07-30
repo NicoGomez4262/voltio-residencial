@@ -22,7 +22,10 @@
   const DIAS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
   const DIAS_FULL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const CAL_S = 6, CAL_E = 22;
-  const DEFAULTS = { pricePerKwh: 800, serviceFee: 0, stationName: '', ownerName: '', kmPerKwh: 6, accent: 'cyan', animations: true, role: null, vehicle: 'pickup' };
+  /* El verde es el color con el que entra todo el mundo la primera vez: es el
+     que mejor le queda a la app y el que queremos que la gente asocie con ella.
+     Quien lo cambie en Ajustes conserva su elección, que viaja en su cuenta. */
+  const DEFAULTS = { pricePerKwh: 800, serviceFee: 0, stationName: '', ownerName: '', kmPerKwh: 6, accent: 'green', animations: true, role: null, vehicle: 'pickup' };
 
   // Respaldo local: si Firestore aún no responde, la búsqueda no queda vacía
   // En producción el conjunto ve solo puestos reales; los de ejemplo son para desarrollar.
@@ -110,7 +113,7 @@
   const tsDate = (ts) => (ts && ts.seconds ? new Date(ts.seconds * 1000) : new Date());
   const starTxt = (a) => '<svg class="ico ico-fill" aria-hidden="true"><use href="#i-star"/></svg>'.repeat(Math.round(a)) + '<svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>'.repeat(5 - Math.round(a));
   const hToMin = (h) => { const p = String(h || '0:0').split(':'); return (+p[0]) * 60 + (+p[1]); };
-  const sizeRank = (s) => ({ 'Pequeño': 1, 'Mediano': 2, 'Grande': 3 }[s] || 2);
+  const sizeRank = (s) => ({ 'Pequeño': 1, 'Mediano': 2, 'Grande': 3 }[s] || 2); // Pequeño ya no se ofrece, pero puede venir de puestos viejos
   function fmtCompact(n, m) {
     if (m === 'kwh') return (Math.round(n * 10) / 10).toLocaleString('es-CO', { maximumFractionDigits: 1 });
     if (m === 'count') return String(Math.round(n));
@@ -160,7 +163,9 @@
     { id: 'Tipo 2', ico: 'i-p-t2', nombre: 'Tipo 2', tec: 'Mennekes',
       ayuda: 'El más común en Colombia. Si tu carro es europeo, es este.' },
     { id: 'CCS', ico: 'i-p-ccs', nombre: 'CCS', tec: 'carga rápida',
-      ayuda: 'Es un Tipo 2 con dos pines gordos abajo, para cargar rápido.' },
+      ayuda: 'Es un Tipo 2 con dos pines gruesos abajo, para cargar rápido.' },
+    { id: 'Tesla', ico: 'i-p-tesla', nombre: 'Tesla', tec: 'NACS',
+      ayuda: 'El de los Tesla. Con adaptador también sirve para otros carros.' },
     { id: 'Doméstico', ico: 'i-p-dom', nombre: 'Doméstico', tec: 'toma de pared',
       ayuda: 'Un enchufe normal: carga lento, pero de noche alcanza.' }
   ];
@@ -238,7 +243,8 @@
     if (currentView === 'buscar') runSearch();
   }
   function showNotice(msg) {
-    ['#buscarNotice', '#novNotice'].forEach((s) => { const el = $(s); if (el) { el.textContent = '<svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg> ' + msg; el.classList.remove('hidden'); } });
+    // innerHTML, no textContent: el icono es marcado y `msg` lo ponemos nosotros.
+    ['#buscarNotice', '#novNotice'].forEach((s) => { const el = $(s); if (el) { el.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg> ' + escapeHtml(msg); el.classList.remove('hidden'); } });
   }
   function hideNotice() { ['#buscarNotice', '#novNotice'].forEach((s) => { const el = $(s); if (el) el.classList.add('hidden'); }); }
   const needLogin = () => { openSheet('#loginSheet'); toast('Inicia sesión para continuar', 'error'); };
@@ -324,7 +330,12 @@
       if (user.emailVerified) b.push('<span class="sc-badge b-ok">✓ Correo verificado</span>');
       b.push('<span class="sc-badge b-id"><svg class="ico" aria-hidden="true"><use href="#i-id"/></svg> Identidad: próximamente</span>');
       $('#accBadges').innerHTML = b.join('');
-    } else top.textContent = '<svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>';
+    } else {
+      // Sin sesión: la silueta, que se lee como "aquí irá tu foto".
+      top.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>';
+      const av = $('#accAvatar');
+      if (av) av.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>';
+    }
     ['#resAuth', '#novAuth', '#puestoAuth', '#chatAuth'].forEach((s) => { const el = $(s); if (el) el.classList.toggle('hidden', logged); });
     $('#resContent').classList.toggle('hidden', !logged);
     $('#novContent').classList.toggle('hidden', !logged);
@@ -539,7 +550,9 @@
      se declara cuál es el conector que uno tiene instalado. */
   function pintarSelectorPuerto(sel, valor) {
     const box = $(sel); if (!box) return;
-    box.innerHTML = PUERTOS.map((p) => celdaPuerto(p, p.id === valor, null)).join('');
+    const faltan = (3 - (PUERTOS.length % 3)) % 3; // completa la última fila
+    box.innerHTML = PUERTOS.map((p) => celdaPuerto(p, p.id === valor, null)).join('') +
+      '<span class="pcell pcell-filler" aria-hidden="true"></span>'.repeat(faltan);
     box.dataset.valor = valor || '';
   }
   function armarSelectorPuerto(sel, alCambiar) {
@@ -1492,7 +1505,7 @@
     const rq = myRequests.find((x) => x.id === id); if (!rq) return;
     const marcar = !rq.pagado;
     VB.markBookingPaid(id, marcar)
-      .then(() => { if (marcar) successPop(); toast(marcar ? 'Pago confirmado <svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> El vecino ya lo ve' : 'Pago marcado como pendiente'); })
+      .then(() => { if (marcar) successPop(); toast(marcar ? 'Pago confirmado El vecino ya lo ve' : 'Pago marcado como pendiente'); })
       .catch(() => toast('No se pudo registrar el pago', 'error'));
   }
 
@@ -1711,10 +1724,10 @@
       el.className = 'hint hint-ok';
       el.textContent = window.VW.isTest(cfg.pubKey)
         ? 'Modo de prueba: los pagos son simulados, no mueven dinero real. Perfecto para ensayar.'
-        : '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Listo para recibir pagos reales de tus vecinos.';
+        : 'Listo para recibir pagos reales de tus vecinos.';
     } else {
       el.className = 'hint hint-warn';
-      el.textContent = '<svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg> ' + window.VW.configError(cfg);
+      el.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg> ' + escapeHtml(window.VW.configError(cfg));
     }
   }
   async function savePuesto() {
@@ -1912,7 +1925,7 @@
       try { spotFotos.push(await compressImageFile(f, 720, 0.6)); ok++; } catch (e) { /* archivo no válido */ }
     }
     renderSpotFotos();
-    toast(ok ? (ok === 1 ? 'Foto agregada <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>' : ok + ' fotos agregadas <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>') : 'No pudimos procesar esas imágenes', ok ? undefined : 'error');
+    toast(ok ? (ok === 1 ? 'Foto agregada' : ok + 'fotos agregadas') : 'No pudimos procesar esas imágenes', ok ? undefined : 'error');
   }
   function findStation(id) { return stations.find((s) => s.id === id) || allStations.find((s) => s.id === id) || null; }
   function openQrView(opts) {
@@ -2272,9 +2285,9 @@
         <div class="grid-2">
           <div class="field"><label for="asNum">N.º parqueadero</label><div class="input-wrap"><input id="asNum" type="text" value="${escapeHtml(g('numeroParqueadero', ''))}" placeholder="P-V04" autocomplete="off"/></div></div>
           <div class="field"><label for="asTorre">Zona / Torre</label><div class="input-wrap"><input id="asTorre" type="text" value="${escapeHtml(g('torre', ''))}" placeholder="Visitantes" autocomplete="off"/></div></div>
-          <div class="field"><span class="field-label">Puerto</span><div class="pgrid pgrid--pick" id="asPort" role="group" aria-label="Tipo de puerto"></div></div>
+          <div class="field field--full"><span class="field-label">Puerto</span><div class="pgrid pgrid--pick" id="asPort" role="group" aria-label="Tipo de puerto"></div></div>
           <div class="field"><label for="asPow">Potencia (kW)</label><div class="input-wrap select-wrap"><select id="asPow">${['3.6', '7.4', '11', '22'].map((v) => `<option ${(+v === +g('pow', 7.4)) ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
-          <div class="field"><label for="asSize">Tamaño</label><div class="input-wrap select-wrap"><select id="asSize">${['Pequeño', 'Mediano', 'Grande'].map((v) => opt(v, g('tamano', 'Mediano'))).join('')}</select></div></div>
+          <div class="field"><label for="asSize">Tamaño</label><div class="input-wrap select-wrap"><select id="asSize">${['Mediano', 'Grande'].map((v) => opt(v, g('tamano', 'Mediano'))).join('')}</select></div></div>
           <div class="field"><label for="asPrecio">Precio por kWh</label><div class="input-wrap"><span class="unit unit--left">$</span><input id="asPrecio" inputmode="numeric" class="has-left" value="${escapeHtml(String(g('precio', 900)))}" autocomplete="off"/></div></div>
           <div class="field"><label for="asDesde">Desde</label><div class="input-wrap"><input id="asDesde" type="time" value="${escapeHtml(g('desde', '06:00'))}"/></div></div>
           <div class="field"><label for="asHasta">Hasta</label><div class="input-wrap"><input id="asHasta" type="time" value="${escapeHtml(g('hasta', '22:00'))}"/></div></div>
@@ -2633,7 +2646,7 @@
     if (hp) $$('#aptoChips .chip').forEach((c) => { const u = +c.dataset.v; c.textContent = taState.piso * 100 + u; c.classList.toggle('is-active', taState.unit === u); });
     const apto = hp && taState.unit ? taState.piso * 100 + taState.unit : null;
     const parts = []; if (taState.torre) parts.push('Torre ' + taState.torre); if (apto) parts.push('Apto ' + apto);
-    $('#taSummary').classList.toggle('hidden', !parts.length); if (parts.length) $('#taSummaryText').textContent = '<svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> ' + parts.join(' · ');
+    $('#taSummary').classList.toggle('hidden', !parts.length); if (parts.length) $('#taSummaryText').innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-building"/></svg> ' + escapeHtml(parts.join(' · '));
   }
   const getTA = () => ({ torre: taState.torre || null, apto: taState.piso && taState.unit ? taState.piso * 100 + taState.unit : null });
   function readInputs() {
@@ -2792,7 +2805,7 @@
     }
     if (ok) {
       persistSessions();
-      toast(ok === 1 ? 'Carga sincronizada con el conjunto <svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>' : ok + ' cargas sincronizadas con el conjunto <svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>');
+      toast(ok === 1 ? 'Carga sincronizada con el conjunto' : ok + 'cargas sincronizadas con el conjunto');
       if (currentView === 'analisis') renderHistory();
     }
   }
@@ -2813,7 +2826,7 @@
   async function toggleSessionPaid(localId) {
     const s = sessions.find((x) => x.id === localId); if (!s) return;
     s.pagado = !s.pagado; persistSessions(); renderHistory();
-    toast(s.pagado ? 'Pago registrado <svg class="ico" aria-hidden="true"><use href="#i-money"/></svg>' : 'Pago marcado como pendiente');
+    toast(s.pagado ? 'Pago registrado' : 'Pago marcado como pendiente');
     if (s.remoteId && VB && user) {
       try { await VB.updateChargeSession(s.remoteId, { pagado: !!s.pagado }); }
       catch (e) { toast('Se guardó en el dispositivo, pero no en la nube', 'error'); }
@@ -2833,8 +2846,11 @@
     if (!sessions.length) { empty.classList.remove('hidden'); return; } empty.classList.add('hidden');
     sessions.forEach((s) => {
       const li = document.createElement('li'); li.className = 'hist-item'; const d = new Date(s.dateISO);
-      const sub = [d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }), d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }), taLabel(s) || (s.driverName ? s.carModel : ''), s.remoteId ? '<svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>' : ''].filter(Boolean).join(' · ');
-      li.innerHTML = `<div class="hist-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div><div class="hist-main"><div class="hist-title">${escapeHtml(s.driverName || s.carModel || 'Carga')}${s.pagado ? ' <span class="sc-badge b-ok"><svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pagada</span>' : ''}</div><div class="hist-sub">${escapeHtml(sub)}</div></div><div class="hist-amount"><div class="hist-cop">${fmtCOP(s.total)}</div><div class="hist-kwh">${fmtKwh(s.kwh)} kWh</div></div><div class="hist-actions"><button class="btn-ghost btn-sm" data-pay="${s.id}">${s.pagado ? 'Sin pagar' : '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pago recibido'}</button><button class="btn-ghost btn-sm" data-share="${s.id}">Compartir</button><button class="btn-ghost btn-sm btn-danger" data-del="${s.id}">Eliminar</button></div>`;
+      // El icono va aparte: `sub` se escapa, y meter marcado en algo que se
+      // escapa lo convierte en texto literal a la vista del vecino.
+      const sub = [d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }), d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }), taLabel(s) || (s.driverName ? s.carModel : '')].filter(Boolean).join(' · ');
+      const nube = s.remoteId ? ' <svg class="ico" aria-hidden="true"><use href="#i-cloud"/></svg>' : '';
+      li.innerHTML = `<div class="hist-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div><div class="hist-main"><div class="hist-title">${escapeHtml(s.driverName || s.carModel || 'Carga')}${s.pagado ? ' <span class="sc-badge b-ok"><svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pagada</span>' : ''}</div><div class="hist-sub">${escapeHtml(sub)}${nube}</div></div><div class="hist-amount"><div class="hist-cop">${fmtCOP(s.total)}</div><div class="hist-kwh">${fmtKwh(s.kwh)} kWh</div></div><div class="hist-actions"><button class="btn-ghost btn-sm" data-pay="${s.id}">${s.pagado ? 'Sin pagar' : '<svg class="ico" aria-hidden="true"><use href="#i-money"/></svg> Pago recibido'}</button><button class="btn-ghost btn-sm" data-share="${s.id}">Compartir</button><button class="btn-ghost btn-sm btn-danger" data-del="${s.id}">Eliminar</button></div>`;
       list.appendChild(li);
     });
     $$('#histList [data-del]').forEach((b) => b.addEventListener('click', () => deleteSession(b.dataset.del)));
@@ -2881,7 +2897,7 @@
     btn.textContent = shareFmt === 'pdf' ? 'Armando el PDF…' : 'Armando la imagen…';
     try {
       const r = await window.VRecibo.compartir(c, shareFmt, { texto: t, stationName: c.stationName || settings.stationName });
-      if (r === 'descargado') toast(shareFmt === 'pdf' ? 'PDF guardado en tus descargas <svg class="ico" aria-hidden="true"><use href="#i-doc"/></svg>' : 'Imagen guardada en tus descargas <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>');
+      if (r === 'descargado') toast(shareFmt === 'pdf' ? 'PDF guardado en tus descargas' : 'Imagen guardada en tus descargas');
     } catch (e) {
       toast('No pudimos armar el recibo. Te lo compartimos como texto.', 'error');
       if (navigator.share) { try { await navigator.share({ title: 'Recibo Voltio', text: t }); } catch (e2) {} }
@@ -2912,17 +2928,30 @@
     sessions.forEach((s) => { const k = s.driverName || 'Sin nombre'; const b = map[k] || (map[k] = { key: k, label: k.length > 8 ? k.slice(0, 7) + '…' : k, full: k, cop: 0, kwh: 0, count: 0 }); b.cop += s.total || 0; b.kwh += s.kwh || 0; b.count++; });
     return Object.values(map).sort((a, b) => b.cop - a.cop).slice(0, 6);
   }
+  /* La retícula va DETRÁS de las barras y con menos peso que ellas: es
+     referencia, no contenido. Tres líneas bastan para leer una altura; con más
+     el fondo compite con el dato. La base sí es sólida, porque es el suelo
+     sobre el que se apoyan las barras. */
   function drawGrid(svg, X0, X1, Y0, Y1, max, m) {
-    [0.25, 0.5, 0.75].forEach((f) => { svg.appendChild(svgEl('line', { x1: X0, x2: X1, y1: Y1 - (Y1 - Y0) * f, y2: Y1 - (Y1 - Y0) * f, stroke: 'rgba(255,255,255,0.06)', 'stroke-dasharray': '3 5' })); const t = svgEl('text', { x: X0, y: Y1 - (Y1 - Y0) * f - 4, class: 'chart-axis' }); t.textContent = fmtCompact(max * f, m); svg.appendChild(t); });
-    const tm = svgEl('text', { x: X0, y: Y0 - 8, class: 'chart-axis' }); tm.textContent = fmtCompact(max, m); svg.appendChild(tm);
-    const base = svgEl('line', { x1: X0, x2: X1, y1: Y1, y2: Y1 }); base.style.stroke = 'rgba(255,255,255,0.14)'; base.style.strokeWidth = '1.5'; svg.appendChild(base);
+    [0.25, 0.5, 0.75, 1].forEach((f) => {
+      const y = Y1 - (Y1 - Y0) * f;
+      svg.appendChild(svgEl('line', { x1: X0, x2: X1, y1: y, y2: y, stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 1 }));
+      const t = svgEl('text', { x: X0, y: y - 5, class: 'chart-axis' });
+      t.textContent = fmtCompact(max * f, m);
+      svg.appendChild(t);
+    });
+    const base = svgEl('line', { x1: X0, x2: X1, y1: Y1, y2: Y1 }); base.style.stroke = 'rgba(255,255,255,0.16)'; base.style.strokeWidth = '1.5'; svg.appendChild(base);
   }
   function drawBars(svg, bk, m) {
     const X0 = 14, X1 = 350, Y0 = 36, Y1 = 200, LABY = 220; const vals = bk.map((b) => m === 'cop' ? b.cop : b.kwh); const max = Math.max.apply(null, vals.concat([0.001])) * 1.05;
-    drawGrid(svg, X0, X1, Y0, Y1, max, m); const span = (X1 - X0) / bk.length, bw = Math.min(30, span * 0.52);
+    drawGrid(svg, X0, X1, Y0, Y1, max, m); const span = (X1 - X0) / bk.length, bw = Math.min(26, span * 0.46);
+    // La barra más alta del período se marca sola: en un vistazo uno quiere
+    // saber cuál fue el día fuerte, no comparar ocho alturas parecidas.
+    const pico = Math.max.apply(null, vals);
     bk.forEach((b, i) => {
       const v = vals[i], cx = X0 + span * i + span / 2, zero = v <= 0, h = zero ? 3 : Math.max(6, (v / max) * (Y1 - Y0));
-      const r = svgEl('rect', { x: (cx - bw / 2).toFixed(1), y: (Y1 - h).toFixed(1), width: bw.toFixed(1), height: h.toFixed(1), rx: Math.min(6, bw / 2), fill: zero ? 'rgba(255,255,255,0.06)' : 'url(#accentGrad)', class: 'chart-bar' + (zero ? ' bar-zero' : '') }); r.style.transitionDelay = (i * 55) + 'ms';
+      const esPico = !zero && v === pico;
+      const r = svgEl('rect', { x: (cx - bw / 2).toFixed(1), y: (Y1 - h).toFixed(1), width: bw.toFixed(1), height: h.toFixed(1), rx: Math.min(5, bw / 2), fill: zero ? 'rgba(255,255,255,0.05)' : 'url(#accentGrad)', class: 'chart-bar' + (zero ? ' bar-zero' : '') + (esPico ? ' bar-peak' : '') }); r.style.transitionDelay = (i * 55) + 'ms';
       if (!zero) { const dt = (b.full || b.label) + ': ' + fmtCOP(b.cop) + ' · ' + fmtKwh(b.kwh) + ' kWh'; r.addEventListener('click', () => toast(dt)); const t = svgEl('title', {}); t.textContent = dt; r.appendChild(t); }
       svg.appendChild(r);
       if (!zero) { const vt = svgEl('text', { x: cx.toFixed(1), y: (Y1 - h - 8).toFixed(1), 'text-anchor': 'middle', 'font-size': '9.5', 'font-weight': '700', fill: '#eaf2ff', 'font-family': 'Orbitron, sans-serif', class: 'chart-val' }); vt.style.transitionDelay = (i * 55 + 250) + 'ms'; vt.textContent = fmtCompact(v, m); svg.appendChild(vt); }
@@ -3035,7 +3064,7 @@
   }
   function setPrice(p) { p = Math.max(0, Math.round(p || 0)); settings.pricePerKwh = p; persistSettings(); syncPriceUI(); }
   function loadSettingsUI() {
-    applyAccent(settings.accent || 'cyan'); applyVehicle(settings.vehicle || 'pickup'); syncPriceUI();
+    applyAccent(settings.accent || DEFAULTS.accent); applyVehicle(settings.vehicle || DEFAULTS.vehicle); syncPriceUI();
     $('#setServiceFee').value = settings.serviceFee || ''; $('#setEff').value = settings.kmPerKwh || ''; $('#setStation').value = settings.stationName || ''; $('#setOwner').value = settings.ownerName || '';
     const sw = $('#setAnim'); sw.classList.toggle('is-on', !!settings.animations); sw.setAttribute('aria-checked', String(!!settings.animations));
     if (settings.serviceFee > 0 && !$('#serviceFee').value) $('#serviceFee').value = settings.serviceFee;
