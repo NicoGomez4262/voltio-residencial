@@ -215,7 +215,16 @@ body[data-accent="pink"]   { --accent:#e878b8; --accent-rgb:232,120,184; --accen
 .seg-btn.is-active svg { opacity: 1; color: var(--accent); }
 
 /* ---------- Campos ---------- */
-.fields { display: grid; gap: 14px; }
+/* Los dos únicos .fields son los grupos que alterna el segmentado de la
+   calculadora. La pastilla se desliza, así que los campos ya no pueden saltar
+   detrás de ella: cruzan. allow-discrete deja que el grupo que se va termine de
+   irse antes de dejar de ocupar sitio. */
+.fields {
+  display: grid; gap: 14px;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), display var(--dur-fast) allow-discrete;
+}
+.fields.is-off { display: none; opacity: 0; transform: translateY(4px); }
+@starting-style { .fields { opacity: 0; transform: translateY(4px); } }
 .field { display: grid; gap: 7px; }
 .field label, .field-label { font-size: 12.5px; color: var(--text-dim); font-weight: 500; }
 .field label b { color: var(--text); font-weight: 600; }
@@ -795,7 +804,15 @@ textarea {
 /* Adónde se va. Irse importa menos que llegar: la salida es más corta. */
 .sheet:not(.is-open) .sheet-backdrop { opacity: 0; transition-duration: 180ms; }
 .sheet:not(.is-open) .sheet-panel { transform: translate(-50%, 100%); transition: transform 240ms var(--ease-out); }
-.sheet-grip { width: 40px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 4px auto 16px; }
+/* La agarradera ahora se agarra de verdad. El área táctil es mucho mayor que la
+   barrita que se ve —12px de barra son imposibles de acertar con el pulgar— y
+   touch-action: none evita que el navegador se lleve el gesto como scroll. */
+.sheet-grip {
+  width: 40px; height: 4px; border-radius: 999px; background: var(--border-strong);
+  margin: 4px auto 16px; position: relative; cursor: grab; touch-action: none;
+}
+.sheet-grip::after { content: ''; position: absolute; left: -60px; right: -60px; top: -14px; bottom: -20px; }
+.sheet-grip:active { cursor: grabbing; }
 .sh-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sh-name { font-size: 18px; font-weight: 700; }
 .sh-host { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
@@ -921,6 +938,10 @@ textarea {
 .msg-in { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .msg-out { align-self: flex-end; color: var(--on-accent); font-weight: 500; background: var(--accent); border-bottom-right-radius: 4px; }
 .msg-time { display: block; font-size: 9.5px; opacity: 0.6; margin-top: 3px; }
+/* La burbuja recién llegada sube desde abajo, que es de donde vienen los
+   mensajes. Solo la última: el resto del hilo ya estaba ahí. */
+.msg-nuevo { animation: msgLlega var(--dur-ui) var(--ease-out) backwards; }
+@keyframes msgLlega { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
 .msg-day { align-self: center; font-size: 10.5px; color: var(--text-mute); padding: 3px 12px; background: var(--surface-2); border-radius: 999px; }
 .chat-inputbar { display: flex; gap: 8px; align-items: center; padding-top: 11px; border-top: 1px solid var(--border); }
 .chat-input { flex: 1; }
@@ -1286,6 +1307,11 @@ button { -webkit-tap-highlight-color: transparent; }
 /* =========================================================
    v2.5 — Métodos de cobro del anfitrión
    ========================================================= */
+/* Esconder o eliminar el puesto: separado del formulario por una línea, para
+   que no se confunda con "otro campo más que rellenar". */
+.danger-zone { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.danger-zone .hint { margin-bottom: 11px; }
+
 .pay-method { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 14px; background: var(--surface-2); }
 .pay-method-head { display: flex; gap: 11px; align-items: flex-start; margin-bottom: 12px; }
 .pay-method-head b { display: block; font-size: 14px; font-weight: 700; }
@@ -1314,7 +1340,22 @@ button { -webkit-tap-highlight-color: transparent; }
 .ocr-bar { height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-3); }
 /* Progreso real y continuo: linear. Y por transform, no por width. */
 .ocr-bar i { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--accent); transform: scaleX(0); transform-origin: left center; transition: transform 300ms linear; }
+/* Los tres pasos del OCR cruzan en vez de cambiar de golpe */
+.ocr-paso {
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out), display var(--dur-ui) allow-discrete;
+}
+.ocr-paso.paso-off { display: none; opacity: 0; transform: translateY(6px); }
+@starting-style { .ocr-paso { opacity: 0; transform: translateY(6px); } }
+
 .ocr-result-box { margin-top: 14px; padding: 14px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid rgba(var(--accent-rgb), 0.3); }
+/* El número que la app acaba de leer del contador: es el pago de todo el
+   proceso, se le deja llegar con el rebote que la app reserva para celebrar. */
+.ocr-paso:not(.paso-off) .ocr-result-box { animation: ocrLlega 420ms var(--ease-pop) 60ms backwards; }
+@keyframes ocrLlega {
+  0%   { transform: scale(0.94); opacity: 0; }
+  60%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
 .ocr-result-label { display: block; font-size: 11px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text-mute); margin-bottom: 9px; }
 
 /* =========================================================
@@ -1423,6 +1464,10 @@ button { -webkit-tap-highlight-color: transparent; }
   }
   /* Se abre y se cierra, pero de una: el aviso lo da el chevrón */
   .details-body { transition: none !important; }
+  /* Lo nuevo del bloque de oportunidades: se conserva el fundido, no el viaje */
+  .msg-nuevo, .ocr-paso:not(.paso-off) .ocr-result-box { animation: fadeIn 150ms ease-out !important; }
+  .fields, .ocr-paso { transform: none !important; transition: opacity 150ms ease-out, display 150ms allow-discrete !important; }
+  .fields.is-off, .ocr-paso.paso-off { transform: none !important; }
   /* La pastilla del segmento aparece donde toca, sin deslizarse */
   .segmented::before { transition: none !important; }
   .aviso-centro.is-out { animation: avisoOut 150ms ease-out forwards !important; }

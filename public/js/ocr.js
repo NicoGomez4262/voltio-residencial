@@ -182,14 +182,19 @@
     frame.y = Math.min(100 - frame.h, Math.max(0, frame.y));
   }
 
+  /* Los tres pasos —encuadre, progreso, resultado— cambiaban de golpe. Ahora
+     cruzan: .ocr-paso lo resuelve en CSS con allow-discrete, así que el que se
+     va termina de irse antes de dejar de ocupar sitio. Es el único sitio de la
+     app donde la foto de un contador se convierte en un número, y ese número
+     merece llegar, no aparecer. */
   function show(step) {
     ['#ocrStage', '#ocrProgress', '#ocrResult'].forEach((s) => {
-      const el = $(s); if (el) el.classList.add('hidden');
+      const el = $(s); if (el) el.classList.add('paso-off');
     });
     const pick = $('#ocrPick');
     if (pick) pick.classList.toggle('hidden', step !== 'pick');
     const el = $(step === 'stage' ? '#ocrStage' : step === 'run' ? '#ocrProgress' : step === 'result' ? '#ocrResult' : null);
-    if (el) el.classList.remove('hidden');
+    if (el) el.classList.remove('paso-off');
   }
   function setError(msg) {
     const e = $('#ocrError');

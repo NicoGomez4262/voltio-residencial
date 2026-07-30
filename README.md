@@ -5,7 +5,7 @@
 Un residente con cargador publica su parqueadero; sus vecinos lo reservan, cargan y le
 pagan. La administración ve el consumo del conjunto y descarga el reporte mensual.
 
-**Producción:** [voltio-red.web.app](https://voltio-red.web.app) · **v2.8.3** ·
+**Producción:** [voltio-red.web.app](https://voltio-red.web.app) · **v2.9.0** ·
 piloto activo en el conjunto MontReal (3 torres · 96 apartamentos)
 
 [![PWA](https://img.shields.io/badge/PWA-instalable-3ad4e6)](https://voltio-red.web.app)

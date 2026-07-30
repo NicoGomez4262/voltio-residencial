@@ -68,7 +68,36 @@
      insignia cambiaba de golpe, sin decir nada. Guardamos el estado anterior
      para realzar solo la tarjeta que de verdad cambió —no todas, ni la primera
      vez que se dibuja la lista—. */
+  /* Al aceptar una solicitud su estado sube de rango y la tarjeta SALTA a otra
+     posición de la lista —a veces se cae de las ocho que se muestran—. FLIP:
+     medimos dónde estaba cada una antes de redibujar, y después las devolvemos
+     visualmente a su sitio viejo para dejarlas viajar al nuevo. Solo transform,
+     así que no hay layout por medio. */
+  function medirPosiciones(ul) {
+    const m = new Map();
+    if (ul) [...ul.children].forEach((li) => { if (li.dataset.id) m.set(li.dataset.id, li.getBoundingClientRect().top); });
+    return m;
+  }
+  function animarReordenamiento(ul, antes) {
+    if (!ul || !antes.size || prefersReduced() || !settings.animations) return;
+    [...ul.children].forEach((li) => {
+      const y0 = antes.get(li.dataset.id);
+      if (y0 == null) return;
+      const dy = y0 - li.getBoundingClientRect().top;
+      if (Math.abs(dy) < 2) return;
+      li.style.transition = 'none';
+      li.style.transform = 'translateY(' + dy + 'px)';
+      requestAnimationFrame(() => {
+        li.style.transition = 'transform 240ms var(--ease-in-out)';
+        li.style.transform = '';
+        setTimeout(() => { li.style.transition = ''; }, 260);
+      });
+    });
+  }
+
   const estadoPrevio = new Map();
+  // Cuántos mensajes tenía cada chat la última vez que se pintó
+  const conteoMsgs = new Map();
   function marcarCambio(el, id, estado) {
     if (!id) return el;
     const antes = estadoPrevio.get(id);
@@ -215,8 +244,14 @@
     $('#roleTag').textContent = role === 'admin' ? 'MontReal · Administración' : role === 'driver' ? 'MontReal · Busco carga' : 'MontReal · Anfitrión';
     $$('#roleSwitch .seg-btn').forEach((b) => b.classList.toggle('is-active', b.dataset.role === settings.role));
     $('#roleGate').classList.add('hidden'); $('#roleGate').setAttribute('aria-hidden', 'true');
-    if (!opts || !opts.keepView) goView(list[0]);
-    else if (!list.includes(currentView)) goView(list[0]);
+    /* keepView solo vale si de verdad hay una vista PINTADA. currentView nace
+       valiendo 'buscar' antes de que nadie haya llamado a goView, así que en el
+       primer arranque este atajo se creía que ya había algo en pantalla y se
+       saltaba el único sitio que pone .is-active: quedaba la cabecera y la barra
+       de abajo puestas y el cuerpo en blanco. Preguntamos al DOM, no a la
+       variable. */
+    const hayVistaPintada = !!$('.view.is-active');
+    if (!opts || !opts.keepView || !hayVistaPintada || !list.includes(currentView)) goView(list[0]);
     else syncHeroCar();
   }
   // Decide y aplica el modo según admin/rol; muestra el selector si aún no hay rol.
@@ -1118,11 +1153,11 @@
     myChats.slice(0, 4).forEach((ch) => cl.appendChild(chatRow(ch, uidv)));
   }
   function renderReqList(ulSel, emptySel, list) {
-    const ul = $(ulSel), esc = vaEscalonada(ul); ul.innerHTML = '';
+    const ul = $(ulSel), esc = vaEscalonada(ul), posiciones = medirPosiciones(ul); ul.innerHTML = '';
     if (emptySel) $(emptySel).classList.toggle('hidden', list.length > 0);
     list.forEach((rq, i) => {
       const [cls, lab] = { pendiente: ['p-pend', 'Pendiente'], confirmada: ['p-ok', 'Aceptada'], rechazada: ['p-no', 'Declinada'], completada: ['p-dim', 'Completada'], cancelada: ['p-dim', 'Cancelada'] }[rq.estado] || ['p-dim', rq.estado];
-      const li = document.createElement('li'); li.className = 'book-card'; escalonar(li, i, esc); marcarCambio(li, rq.id, rq.estado);
+      const li = document.createElement('li'); li.className = 'book-card'; li.dataset.id = rq.id; escalonar(li, i, esc); marcarCambio(li, rq.id, rq.estado);
       const fx = parseYmd(rq.fecha).toLocaleDateString('es-CO', { weekday: 'short', day: '2-digit', month: 'short' });
       li.innerHTML = `
         <div class="bk-top"><div><div class="bk-name">${escapeHtml(rq.driverName || 'Vecino')}</div><div class="bk-sub">quiere ${escapeHtml(rq.stationName || 'tu puesto')}</div></div><span class="bk-pill ${cls}">${lab}</span></div>
@@ -1135,6 +1170,7 @@
         </div>`;
       ul.appendChild(li);
     });
+    animarReordenamiento(ul, posiciones);
     $$(ulSel + ' [data-acc]').forEach((b) => b.addEventListener('click', () => acceptRequest(b.dataset.acc)));
     $$(ulSel + ' [data-rej]').forEach((b) => b.addEventListener('click', () => openReject(b.dataset.rej)));
     $$(ulSel + ' [data-done]').forEach((b) => b.addEventListener('click', () => VB.updateBooking(b.dataset.done, { estado: 'completada' }).then(() => toast('Carga completada 🔋'))));
@@ -1239,7 +1275,19 @@
     $('#puestoAuth').classList.toggle('hidden', logged);
     $('#puestoForm').classList.toggle('hidden', !logged);
     $('#puestoState').classList.toggle('hidden', !myStationDoc);
-    if (myStationDoc) { $('#puestoState').textContent = myStationDoc.visible !== false ? '● Publicado' : '○ Oculto'; loadPuestoForm(myStationDoc); }
+    $('#spManage').classList.toggle('hidden', !logged);
+    $('#spDangerZone').classList.toggle('hidden', !myStationDoc);
+    $('#spSaveLabel').textContent = myStationDoc ? 'Guardar cambios' : 'Publicar mi puesto';
+    if (myStationDoc) { pintarEstadoPuesto(); loadPuestoForm(myStationDoc); }
+  }
+  // El rótulo del estado y el texto bajo el interruptor cuentan lo mismo desde
+  // dos sitios: se pintan juntos para que no puedan contradecirse.
+  function pintarEstadoPuesto() {
+    const visible = !myStationDoc || myStationDoc.visible !== false;
+    $('#puestoState').textContent = visible ? '● Publicado' : '○ Oculto';
+    $('#spVisibleSub').textContent = visible
+      ? 'Aparece en la búsqueda del conjunto'
+      : 'Escondido: nadie puede reservarlo';
   }
   function loadPuestoForm(sp) {
     $('#spName').value = sp.nombre || ''; selectWithFallback('#spTorre', sp.torre || ''); $('#spNum').value = sp.numeroParqueadero || '';
@@ -1254,6 +1302,69 @@
     setWompiSwitch(!!sp.wompi);
     loadWompiConfig(sp.id);
   }
+  /* Esconder el puesto se guarda solo, en el momento. Antes el interruptor era
+     parte del formulario: había que acordarse de pulsar Guardar después de
+     apagarlo, y quien lo apagaba y se iba seguía apareciendo en la búsqueda de
+     sus vecinos creyendo que no. */
+  async function cambiarVisibilidad() {
+    const sw = $('#spVisible');
+    const on = !sw.classList.contains('is-on');
+    const pintar = (v) => { sw.classList.toggle('is-on', v); sw.setAttribute('aria-checked', String(v)); };
+    pintar(on);
+    // Todavía sin publicar: aquí el interruptor es solo el valor inicial del alta.
+    if (!myStationDoc || !VB || !user) return;
+    try {
+      await VB.updateStationFields(myStationDoc.id, { visible: on });
+      myStationDoc.visible = on;
+      pintarEstadoPuesto();
+      toast(on ? 'Tu puesto vuelve a aparecer en la búsqueda' : 'Puesto escondido · ya no aparece en la búsqueda');
+    } catch (e) {
+      pintar(!on);
+      toast('No se pudo cambiar la visibilidad', 'error');
+    }
+  }
+
+  /* Eliminar es irreversible y toca a terceros, así que antes miramos si hay
+     vecinos con la hora ya apartada: quitarles el puesto por debajo no es una
+     opción. Si los hay, se explica y se ofrece esconderlo, que consigue lo
+     mismo —no aparecer— sin romperle la reserva a nadie. */
+  async function eliminarPuesto() {
+    if (!myStationDoc) return;
+    if (!VB || !user) { toast('Inicia sesión para eliminar tu puesto', 'error'); return; }
+    const vivas = myRequests.filter((r) => r.estado === 'pendiente' || r.estado === 'confirmada').length;
+    if (vivas) {
+      alert('Tu puesto tiene ' + vivas + (vivas === 1 ? ' reserva activa' : ' reservas activas') + '.\n\n' +
+            'No se puede eliminar sin dejar a un vecino colgado. Decline esas solicitudes o espere a que terminen.\n\n' +
+            'Si lo que quieres es dejar de recibir reservas nuevas, apaga «Visible para los vecinos»: el puesto desaparece de la búsqueda y las reservas que ya tienes siguen en pie.');
+      return;
+    }
+    if (!confirm('¿Eliminar «' + (myStationDoc.nombre || 'tu puesto') + '»?\n\n' +
+                 'Desaparece de la búsqueda del conjunto y no se puede deshacer. Tu historial de cargas y tus cobros se conservan.\n\n' +
+                 'Si solo quieres descansar un tiempo, cancela y apaga «Visible para los vecinos».')) return;
+    const btn = $('#spDelete');
+    try {
+      btn.disabled = true; btn.textContent = 'Eliminando…';
+      await VB.deleteStation(myStationDoc.id);
+      myStationDoc = null;
+      limpiarFormPuesto();
+      renderPuesto();
+      toast('Puesto eliminado');
+    } catch (e) {
+      toast('No se pudo eliminar el puesto', 'error');
+    } finally { btn.disabled = false; btn.textContent = 'Eliminar mi puesto'; }
+  }
+  // Tras eliminar, el formulario no puede quedarse con los datos del puesto que
+  // ya no existe: quien vuelva a publicar empieza en blanco, no reviviendo algo.
+  function limpiarFormPuesto() {
+    ['#spName', '#spNum', '#spCond', '#spPrecio', '#spFee', '#spDesc', '#spBreb', '#spTitular', '#spPowOtra'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
+    if ($('#spTorre')) $('#spTorre').value = '';
+    if ($('#spBanco')) $('#spBanco').value = '';
+    setPotencia(7.4);
+    spotFotos = []; renderSpotFotos();
+    spotQr = null; qrShow($('#spQrPreview'), $('#spQrImg'), $('#spQrPick'), null);
+    const sw = $('#spVisible'); sw.classList.add('is-on'); sw.setAttribute('aria-checked', 'true');
+  }
+
   /* ---------- Potencia del cargador ----------
      Las cuatro de siempre cubren casi todo, pero hay cargadores de 9,6 o de 16 kW:
      "Otra…" abre un campo para escribir la que sea. */
@@ -1407,7 +1518,17 @@
       });
       if (!msgs.length) html = '<div class="msg-day">Escribe el primer mensaje 👋</div>';
       if (ctx.demo) html += '<div class="chat-demo-note">Puesto de ejemplo: el anfitrión no responderá.</div>';
-      box.innerHTML = html; box.scrollTop = box.scrollHeight;
+      box.innerHTML = html;
+      /* El hilo entero se reconstruye en cada cambio, así que animar .msg a
+         secas haría entrar de nuevo toda la conversación cada vez que alguien
+         escribe. Solo se marca la última burbuja, y solo si de verdad hay un
+         mensaje más que antes. */
+      if (msgs.length > (conteoMsgs.get(ctx.chatId) || 0)) {
+        const ultima = box.querySelector('.msg:last-of-type');
+        if (ultima) ultima.classList.add('msg-nuevo');
+      }
+      conteoMsgs.set(ctx.chatId, msgs.length);
+      box.scrollTop = box.scrollHeight;
       seen.msgs[ctx.chatId] = Date.now(); persistSeen();
     });
     setTimeout(() => $('#chInput').focus(), 300);
@@ -1963,6 +2084,88 @@
   function openSheet(sel) { $(sel).classList.add('is-open'); $(sel).setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden'; }
   function closeSheet(sel) { $(sel).classList.remove('is-open'); $(sel).setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; if (sel === '#chatSheet') { stopWatchers(['msgs']); chatCtx = null; } }
 
+  /* ---------- Arrastrar la hoja para cerrarla ----------
+     Había nueve agarraderas dibujadas diciendo "tírame" y ninguna funcionaba.
+     Reglas del gesto:
+     · El panel sigue al dedo 1:1 mientras baja, sin transición de por medio.
+     · Hacia arriba no hay nada que ver: se resiste cada vez más en vez de
+       frenar en seco, que se lee como "roto".
+     · Al soltar decide la VELOCIDAD, no solo la distancia: un tirón corto y
+       rápido cierra igual que arrastrar media hoja despacio.
+     · El fondo se aclara a la par, así que el gesto se entiende antes de
+       terminarlo. */
+  function armarArrastreHojas() {
+    const LIMITE = 0.3;        // fracción del alto a partir de la cual se cierra
+    const VELOCIDAD = 0.5;     // px/ms hacia abajo que cierran sin importar la distancia
+    let panel = null, hoja = null, alto = 0, y0 = 0, y = 0, activo = false;
+    // La velocidad se mide sobre el ÚLTIMO tramo, no sobre el gesto entero: si
+    // se promedia desde el principio, quien arrastra rápido, se detiene y suelta
+    // sale con una velocidad alta que ya no es verdad, y la hoja se le cierra
+    // cuando acababa de decidir que no.
+    let ultY = 0, ultT = 0, vel = 0;
+
+    // Resistencia progresiva: cuanto más se pasa, menos acompaña (§rubber-band)
+    const gomita = (x, dim) => (x * dim * 0.55) / (dim + 0.55 * Math.abs(x));
+
+    const pintar = (py) => {
+      panel.style.transition = 'none';
+      panel.style.transform = 'translate(-50%, ' + py + 'px)';
+      const fondo = hoja.querySelector('.sheet-backdrop');
+      if (fondo) { fondo.style.transition = 'none'; fondo.style.opacity = String(Math.max(0, 1 - py / alto)); }
+    };
+    const soltarEstilos = () => {
+      panel.style.transition = ''; panel.style.transform = '';
+      const fondo = hoja.querySelector('.sheet-backdrop');
+      if (fondo) { fondo.style.transition = ''; fondo.style.opacity = ''; }
+    };
+
+    document.addEventListener('pointerdown', (e) => {
+      const grip = e.target.closest('.sheet-grip');
+      if (!grip) return;
+      hoja = grip.closest('.sheet'); panel = grip.closest('.sheet-panel');
+      if (!hoja || !panel) return;
+      alto = panel.getBoundingClientRect().height || 1;
+      y0 = e.clientY; y = 0; ultY = 0; ultT = performance.now(); vel = 0; activo = true;
+      panel.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    document.addEventListener('pointermove', (e) => {
+      if (!activo) return;
+      const d = e.clientY - y0;
+      y = d >= 0 ? d : -gomita(-d, alto);
+      const ahora = performance.now(), dt = ahora - ultT;
+      if (dt > 8) { vel = (y - ultY) / dt; ultY = y; ultT = ahora; }
+      pintar(y);
+    });
+
+    const soltar = (e) => {
+      if (!activo) return;
+      activo = false;
+      try { panel.releasePointerCapture(e.pointerId); } catch (err) {}
+      // Si el dedo se quedó quieto antes de soltar, la última velocidad ya no
+      // dice nada: solo cuenta la distancia.
+      if (performance.now() - ultT > 100) vel = 0;
+      const cierra = y > alto * LIMITE || vel > VELOCIDAD;
+      if (cierra) {
+        // Soltar los estilos en línea deja que mande el CSS de salida, que ya
+        // baja el panel su propio alto: la salida continúa desde donde iba.
+        soltarEstilos();
+        closeSheet('#' + hoja.id);
+      } else {
+        // Vuelve a su sitio con la curva de UI, no con la de entrada: esto es
+        // una corrección, no una llegada.
+        panel.style.transition = 'transform 240ms var(--ease-out)';
+        panel.style.transform = 'translate(-50%, 0)';
+        const fondo = hoja.querySelector('.sheet-backdrop');
+        if (fondo) { fondo.style.transition = 'opacity 240ms var(--ease-out)'; fondo.style.opacity = '1'; }
+        setTimeout(soltarEstilos, 260);
+      }
+    };
+    document.addEventListener('pointerup', soltar);
+    document.addEventListener('pointercancel', soltar);
+  }
+
   /* =========================================================
      Toasts
      ========================================================= */
@@ -2493,7 +2696,16 @@
   /* =========================================================
      Init
      ========================================================= */
-  function setMode(m) { mode = m; $$('.seg-btn[data-mode]').forEach((b) => b.classList.toggle('is-active', b.dataset.mode === m)); $('#meterFields').classList.toggle('hidden', m !== 'meter'); $('#directFields').classList.toggle('hidden', m !== 'direct'); updateLive(); }
+  /* La pastilla del segmentado se desliza, así que los campos de debajo ya no
+     pueden saltar: cruzan. .is-off en vez de .hidden porque display:none no se
+     puede transicionar sin allow-discrete, que es lo que hace el CSS. */
+  function setMode(m) {
+    mode = m;
+    $$('.seg-btn[data-mode]').forEach((b) => b.classList.toggle('is-active', b.dataset.mode === m));
+    $('#meterFields').classList.toggle('is-off', m !== 'meter');
+    $('#directFields').classList.toggle('is-off', m !== 'direct');
+    updateLive();
+  }
   function doCalc() {
     const err = $('#calcError'), inp = readInputs(), msg = validate(inp);
     if (msg) { err.textContent = msg; err.classList.remove('hidden'); if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20]); } catch (e) {} } return; }
@@ -2531,6 +2743,7 @@
     if (DEMO_ON) stations = DEMO_STATIONS.slice();
     setBattery(100);
     document.addEventListener('pointerdown', addRipple, { passive: true });
+    armarArrastreHojas();
 
     whenVB((vb) => {
       VB = vb;
@@ -2669,7 +2882,8 @@
 
     // Mi puesto
     $('#spSave').addEventListener('click', savePuesto);
-    $('#spVisible').addEventListener('click', () => { const sw = $('#spVisible'); sw.classList.toggle('is-on'); sw.setAttribute('aria-checked', String(sw.classList.contains('is-on'))); });
+    $('#spVisible').addEventListener('click', cambiarVisibilidad);
+    $('#spDelete').addEventListener('click', eliminarPuesto);
 
     // Chat / rechazo / rating
     $('#chSend').addEventListener('click', sendChat); $('#chInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
@@ -2715,6 +2929,20 @@
     $('#resetBtn').addEventListener('click', () => { if (confirm('¿Restablecer datos locales (ajustes y recibos)?')) { [LS_SETTINGS, LS_SESSIONS].forEach((k) => localStorage.removeItem(k)); settings = Object.assign({}, DEFAULTS); sessions = []; loadSettingsUI(); renderHistory(); resetForm(); $('#roleGate').classList.remove('hidden'); toast('Datos locales restablecidos'); } });
 
     updateBandNote(); updateLive();
+
+    /* Decidir el modo de entrada AQUÍ, sin esperar a que conteste la nube: si el
+       vecino ya eligió rol entra directo a su pestaña, y si no, ve el selector.
+       Antes esto solo ocurría por caminos indirectos —al elegir rol, al cambiar
+       de sesión, al bajar el perfil— y había arranques en los que no pasaba por
+       ninguno: la app se quedaba sin ninguna vista puesta. */
+    refreshMode();
+
+    /* Y una red por si algo del arranque falla de una forma que no previmos:
+       pase lo que pase, a los 1,5 s tiene que haber una vista o el selector de
+       rol. Nadie debe quedarse mirando una pantalla vacía. */
+    setTimeout(() => {
+      if (!$('.view.is-active') && $('#roleGate').classList.contains('hidden')) refreshMode();
+    }, 1500);
   }
   function updateBandNote() {
     const notes = { any: '', m: 'Franja de la mañana: 6:00 a 12:00', t: 'Franja de la tarde: 12:00 a 18:00', n: 'Franja de la noche: 18:00 a 24:00' };

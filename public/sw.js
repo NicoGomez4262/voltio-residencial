@@ -1,16 +1,16 @@
 /* Service Worker de Voltio — app shell cache + offline */
-const VERSION = 'voltio-v2.8.3';
+const VERSION = 'voltio-v2.9.0';
 const CDN_CACHE = 'voltio-cdn-v1';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/css/styles.css?v=2.8.3',
-  '/js/app.js?v=2.8.3',
-  '/js/reporte.js?v=2.8.3',
-  '/js/backend.js?v=2.8.3',
-  '/js/wompi.js?v=2.8.3',
-  '/js/recibo.js?v=2.8.3',
-  '/js/ocr.js?v=2.8.3',
+  '/css/styles.css?v=2.9.0',
+  '/js/app.js?v=2.9.0',
+  '/js/reporte.js?v=2.9.0',
+  '/js/backend.js?v=2.9.0',
+  '/js/wompi.js?v=2.9.0',
+  '/js/recibo.js?v=2.9.0',
+  '/js/ocr.js?v=2.9.0',
   '/js/firebase-config.js',
   '/manifest.webmanifest',
   '/favicon.svg',
